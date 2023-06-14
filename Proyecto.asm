@@ -2,6 +2,7 @@ title "EyPC 2023-II Grupo 2 Proyecto - Base"
 	.model small
 	.386
 	.stack 64
+; TODO : Conversión de bases, operaciones, agregar botón C, y modo en Octal
 ;Macros
 ;clear - Limpia pantalla
 clear macro
@@ -363,14 +364,14 @@ botones_7_4_1_0:
 	jbe boton1
 
 	;renglon 20 es espacio vacio
-	cmp dx,20
+	cmp dx,18
 	je mouse_no_clic
 
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton '0'
 	cmp dx,21
 	jbe boton0
-
+	
 	;Si no es ninguno de los anteriores
 	jmp mouse_no_clic
 
@@ -566,22 +567,22 @@ boton9_1:
         mov num_boton,9
         jmp jmp_lee_oper1
 botonA_1:
-        mov num_boton,"A"
+        mov num_boton,10
         jmp jmp_lee_oper1
 botonB_1:
-        mov num_boton,"B"
+        mov num_boton,11
         jmp jmp_lee_oper1
 botonC_1:
-        mov num_boton,"C"
+        mov num_boton,12
         jmp jmp_lee_oper1
 botonD_1:
-        mov num_boton,"D"
+        mov num_boton,13
         jmp jmp_lee_oper1
 botonE_1:
-        mov num_boton,"E"
+        mov num_boton,14
         jmp jmp_lee_oper1
 botonF_1:
-        mov num_boton,"F"
+        mov num_boton,15
         jmp jmp_lee_oper1
 botonSuma_1:
 		mov operador,"+"
@@ -628,7 +629,12 @@ imprime_num1:
 	sub [col_aux],cl 		;Para calcular la columna en donde comienza a imprimir en pantalla de acuerdo a CX
 	posiciona_cursor [ren_aux],[col_aux] 	;Posiciona el cursor en pantalla usando ren_aux y col_aux
 	mov cl,[num1+di] 		;copia el digito en CL
-	add cl,30h				;Pasa valor ASCII
+
+	or cl,30h				;Pasa valor ASCII
+	cmp	cl,3Ah
+	jb  imprime_num1_dec
+	add cl,07h
+imprime_num1_dec:
 	imprime_caracter_color cl,bgNegro,cBlanco	;Imprime caracter en CL, color blanco
 	inc di 					;incrementa DI para recorrer el arreglo num1
 	pop cx 					;recupera el valor de CX al inicio del loop
@@ -657,6 +663,10 @@ imprime_num2:
 	posiciona_cursor [ren_aux],[col_aux]
 	mov		cl,[num2+di]
 	or		cl,30h
+	cmp		cl,3Ah
+	jb		imprime_num2_dec
+	add 	cl,07h
+imprime_num2_dec:
 	imprime_caracter_color cl,bgNegro,cBlanco
 	inc		di
 	pop		cx
