@@ -155,6 +155,7 @@ diezmil		dw		10000d
 mil			dw		1000d
 cien 		dw 		100d
 diez		dw		10d
+dhex		dw		16d
 ;Auxiliar para calculo de coordenadas del mouse
 ocho		db 		8
 ;Cuando el driver del mouse no esta disponible
@@ -686,6 +687,14 @@ botonDivR_1:
 		jmp mouse_no_clic
 botonIgual_1:
 ;Salto auxiliar para hacer un salto más largo
+		mov bx,offset num1
+		call DIG2DEC
+		mov	[num1h],ax
+
+		mov	bx,offset num2
+		call DIG2DEC
+		mov [num2h],ax
+		jmp mouse_no_clic
 jmp_lee_oper1:
 	jmp lee_oper1
 
@@ -770,6 +779,28 @@ teclado:
 
 salir:
  	clear
+
+	mov ax,[num1h]
+  mov     bp,sp
+  mov     bx,10
+loop_digitos:
+  xor     dx,dx
+  div     bx
+  push    dx
+  cmp     ax,0h
+  jne     loop_digitos
+  mov     ax,0200h
+loop_imprimir:
+  pop     dx
+  or      dx,30h
+  int 21h
+  cmp     bp,sp
+  jne     loop_imprimir
+  mov     dx,000Ah
+  int 21h
+  add     dx,0003h
+  int 21h
+
 	mov ax,4C00h
 	int 21h
 
@@ -1466,5 +1497,52 @@ imp_boton_bin:
 		call CALCULADORA_UI
 		ret 			;Regreso de llamada a procedimiento
 	endp	 			;Indica fin de procedimiento UI para el ensamblador
+
+; TODO : CONVERTIT DIG a NUM
+DIG2DEC proc tiny ; El número se pasará por bx
+	push     	bp
+	mov      	bp,sp
+	push		bx
+	; push		ax
+	push		cx
+	push 		si
+
+	xor			si,si
+	; mov			cx,10h
+	xor			ax,ax
+
+	xor			ch,ch
+txt2num:
+	mov			cl,[bx + si]
+	cmp			cl,0h
+	je			txt2num_end
+
+	;! xor			cx,30h
+; 	cmp			cx,10d
+; 	jl			txtdec
+
+; !
+; 	cmp			[baseSel],baseHex
+; 	jne			txtdec
+; txthex:
+; 	mul			[dhex]
+; 	add			ax,cx
+
+; txtdec:
+	mul			[diez]
+	add			ax,cx
+
+txt2num_end:
+	inc			si
+	cmp			si,digitos
+	jl			txt2num
+
+	pop			si
+	pop			cx
+	; pop			ax
+	pop			bx
+	pop      	bp
+	ret
+DIG2DEC endp
 
 end inicio

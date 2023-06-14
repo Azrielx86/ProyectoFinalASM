@@ -1,9 +1,9 @@
 @echo off
 set filename=%1
-tasm %filename%.asm
+tasm /zi %filename%.asm
 if ERRORLEVEL 1 goto end
 echo Compile sucess
-tlink %filename%.obj
+tlink /v/3 %filename%.obj
 if ERRORLEVEL 1 goto end
 echo Link success
 echo:
