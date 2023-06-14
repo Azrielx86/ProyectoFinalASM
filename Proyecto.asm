@@ -131,6 +131,12 @@ bgBlanco 		equ		0F0h
 
 digitos		equ		4
 
+baseDec		equ		0
+baseHex		equ		1
+baseBin		equ		2
+
+baseSel		db		0
+
 num1 		db 		digitos dup(0) 		;primer numero, en cada localidad guarda 1 digito, puede ser hasta 4 digitos
 num2 		db 		digitos dup(0)		;segundo numero, en cada localidad guarda 1 digito, puede ser hasta 4 digitos
 num1h		dw		0
@@ -336,8 +342,19 @@ botones_base_num:
 	;corresponde con boton 'Dec'
 	cmp dx,9
 	jbe botonDec
+	cmp dx,10
+	je mouse_no_clic
 
-	;;;;;Completar
+	cmp dx,13
+	jbe botonHex
+	cmp dx,14
+	je mouse_no_clic
+
+	cmp dx,17
+	jbe botonBin
+
+	cmp dx,18
+	je mouse_no_clic
 
 botones_7_4_1_0:
 	;Revisar si el renglon en donde fue presionado el mouse
@@ -484,16 +501,28 @@ boton8:
 boton9:
     jmp boton9_1
 botonA:
+	cmp [baseSel],baseHex
+	jne	mouse_no_clic
     jmp botonA_1
 botonB:
+	cmp [baseSel],baseHex
+	jne	mouse_no_clic
     jmp botonB_1
 botonC:
+	cmp [baseSel],baseHex
+	jne	mouse_no_clic
     jmp botonC_1
 botonD:
+	cmp [baseSel],baseHex
+	jne	mouse_no_clic
     jmp botonD_1
 botonE:
+	cmp [baseSel],baseHex
+	jne	mouse_no_clic
     jmp botonE_1
 botonF:
+	cmp [baseSel],baseHex
+	jne	mouse_no_clic
     jmp botonF_1
 botonSuma:
 	jmp botonSuma_1
@@ -509,10 +538,16 @@ botonIgual:
 	jmp	botonIgual_1
 	; ! completar
 botonDec:
+	mov			[baseSel],baseDec
 	call LIMPIA_PANTALLA_CALC
 	jmp mouse_no_clic
 botonHex:
+	mov			[baseSel],baseHex
+	call LIMPIA_PANTALLA_CALC
+	jmp mouse_no_clic
 botonBin:
+	mov			[baseSel],baseBin
+	call LIMPIA_PANTALLA_CALC
 	jmp mouse_no_clic
 ;Logica para revisar si el mouse fue presionado en [X]
 ;[X] se encuentra en renglon 0 y entre columnas 76 y 79
@@ -824,112 +859,226 @@ salir:
 		;Imprime Boton 2
 		mov [boton_columna],30
 		mov [boton_renglon],15
-		mov [boton_color],bgGrisClaro
+        cmp baseSel,baseHex
+        je imp_boton_2_enable
+		cmp baseSel,baseDec
+		je imp_boton_2_enable
+        mov [boton_color],bgGrisOscuro
+        mov [boton_caracter_color],cBlanco
+        jmp imp_boton_2
+imp_boton_2_enable:
+        mov [boton_color],bgCyan
         mov [boton_caracter_color],cNegro
+imp_boton_2:
 		mov [boton_caracter],'2'
 		call IMPRIME_BOTON
 
 		;Imprime Boton 3
 		mov [boton_columna],36
 		mov [boton_renglon],15
-		mov [boton_color],bgGrisClaro
+        cmp baseSel,baseHex
+        je imp_boton_3_enable
+        cmp baseSel,baseDec
+        je imp_boton_3_enable
+        mov [boton_color],bgGrisOscuro
+        mov [boton_caracter_color],cBlanco
+        jmp imp_boton_3
+imp_boton_3_enable:
+        mov [boton_color],bgCyan
         mov [boton_caracter_color],cNegro
+imp_boton_3:
 		mov [boton_caracter],'3'
 		call IMPRIME_BOTON
 
 		;Imprime Boton 4
 		mov [boton_columna],24
 		mov [boton_renglon],11
-		mov [boton_color],bgGrisClaro
+        cmp baseSel,baseHex
+        je imp_boton_4_enable
+        cmp baseSel,baseDec
+        je imp_boton_4_enable
+        mov [boton_color],bgGrisOscuro
+        mov [boton_caracter_color],cBlanco
+        jmp imp_boton_4
+imp_boton_4_enable:
+        mov [boton_color],bgCyan
         mov [boton_caracter_color],cNegro
+imp_boton_4:
 		mov [boton_caracter],'4'
 		call IMPRIME_BOTON
 
 		;Imprime Boton 5
 		mov [boton_columna],30
 		mov [boton_renglon],11
-		mov [boton_color],bgGrisClaro
+        cmp baseSel,baseHex
+        je imp_boton_5_enable
+        cmp baseSel,baseDec
+        je imp_boton_5_enable
+        mov [boton_color],bgGrisOscuro
+        mov [boton_caracter_color],cBlanco
+        jmp imp_boton_5
+imp_boton_5_enable:
+        mov [boton_color],bgCyan
         mov [boton_caracter_color],cNegro
+imp_boton_5:
 		mov [boton_caracter],'5'
 		call IMPRIME_BOTON
 
 		;Imprime Boton 6
 		mov [boton_columna],36
 		mov [boton_renglon],11
-		mov [boton_color],bgGrisClaro
+        cmp baseSel,baseHex
+        je imp_boton_6_enable
+        cmp baseSel,baseDec
+        je imp_boton_6_enable
+        mov [boton_color],bgGrisOscuro
+        mov [boton_caracter_color],cBlanco
+        jmp imp_boton_6
+imp_boton_6_enable:
+        mov [boton_color],bgCyan
         mov [boton_caracter_color],cNegro
+imp_boton_6:
 		mov [boton_caracter],'6'
 		call IMPRIME_BOTON
 
 		;Imprime Boton 7
 		mov [boton_columna],24
 		mov [boton_renglon],7
-		mov [boton_color],bgGrisClaro
+        cmp baseSel,baseHex
+        je imp_boton_7_enable
+        cmp baseSel,baseDec
+        je imp_boton_7_enable
+        mov [boton_color],bgGrisOscuro
+        mov [boton_caracter_color],cBlanco
+        jmp imp_boton_7
+imp_boton_7_enable:
+        mov [boton_color],bgCyan
         mov [boton_caracter_color],cNegro
+imp_boton_7:
 		mov [boton_caracter],'7'
 		call IMPRIME_BOTON
 
 		;Imprime Boton 8
 		mov [boton_columna],30
 		mov [boton_renglon],7
-		mov [boton_color],bgGrisClaro
+        cmp baseSel,baseHex
+        je imp_boton_8_enable
+        cmp baseSel,baseDec
+        je imp_boton_8_enable
+        mov [boton_color],bgGrisOscuro
+        mov [boton_caracter_color],cBlanco
+        jmp imp_boton_8
+imp_boton_8_enable:
+        mov [boton_color],bgCyan
         mov [boton_caracter_color],cNegro
+imp_boton_8:
 		mov [boton_caracter],'8'
 		call IMPRIME_BOTON
 
 		;Imprime Boton 9
 		mov [boton_columna],36
 		mov [boton_renglon],7
-		mov [boton_color],bgGrisClaro
+        cmp baseSel,baseHex
+        je imp_boton_9_enable
+        cmp baseSel,baseDec
+        je imp_boton_9_enable
+        mov [boton_color],bgGrisOscuro
+        mov [boton_caracter_color],cBlanco
+        jmp imp_boton_9
+imp_boton_9_enable:
+        mov [boton_color],bgCyan
         mov [boton_caracter_color],cNegro
+imp_boton_9:
 		mov [boton_caracter],'9'
 		call IMPRIME_BOTON
 
 		;Imprime Boton A
 		mov [boton_columna],30
 		mov [boton_renglon],19
+		cmp	baseSel,baseHex
+		je	imp_boton_A_enable
+		mov [boton_color],bgGrisOscuro
+		mov [boton_caracter_color],cBlanco
+		jmp imp_boton_A
+imp_boton_A_enable:
 		mov [boton_color],bgVerde
         mov [boton_caracter_color],cNegro
+imp_boton_A:
 		mov [boton_caracter],'A'
 		call IMPRIME_BOTON
 
 		;Imprime Boton B
 		mov [boton_columna],36
 		mov [boton_renglon],19
+		cmp	baseSel,baseHex
+		je	imp_boton_B_enable
+		mov [boton_color],bgGrisOscuro
+		mov [boton_caracter_color],cBlanco
+		jmp imp_boton_B
+imp_boton_B_enable:
 		mov [boton_color],bgVerde
         mov [boton_caracter_color],cNegro
+imp_boton_B:
 		mov [boton_caracter],'B'
 		call IMPRIME_BOTON
 
 		;Imprime Boton C
 		mov [boton_columna],42
 		mov [boton_renglon],19
-		mov [boton_color],bgVerde
+        cmp     baseSel,baseHex
+        je      imp_boton_C_enable
+        mov [boton_color],bgGrisOscuro
+        mov [boton_caracter_color],cBlanco
+        jmp imp_boton_C
+imp_boton_C_enable:
+        mov [boton_color],bgVerde
         mov [boton_caracter_color],cNegro
+imp_boton_C:
 		mov [boton_caracter],'C'
 		call IMPRIME_BOTON
 
 		;Imprime Boton D
 		mov [boton_columna],42
 		mov [boton_renglon],15
-		mov [boton_color],bgVerde
+        cmp     baseSel,baseHex
+        je      imp_boton_D_enable
+        mov [boton_color],bgGrisOscuro
+        mov [boton_caracter_color],cBlanco
+        jmp imp_boton_D
+imp_boton_D_enable:
+        mov [boton_color],bgVerde
         mov [boton_caracter_color],cNegro
+imp_boton_D:
 		mov [boton_caracter],'D'
 		call IMPRIME_BOTON
 
 		;Imprime Boton E
 		mov [boton_columna],42
 		mov [boton_renglon],11
-		mov [boton_color],bgVerde
+        cmp     baseSel,baseHex
+        je      imp_boton_E_enable
+        mov [boton_color],bgGrisOscuro
+        mov [boton_caracter_color],cBlanco
+        jmp imp_boton_E
+imp_boton_E_enable:
+        mov [boton_color],bgVerde
         mov [boton_caracter_color],cNegro
+imp_boton_E:
 		mov [boton_caracter],'E'
 		call IMPRIME_BOTON
 
         ;Imprime Boton F
 		mov [boton_columna],42
 		mov [boton_renglon],7
-		mov [boton_color],bgVerde
+        cmp     baseSel,baseHex
+        je      imp_boton_F_enable
+        mov [boton_color],bgGrisOscuro
+        mov [boton_caracter_color],cBlanco
+        jmp imp_boton_F
+imp_boton_F_enable:
+        mov [boton_color],bgVerde
         mov [boton_caracter_color],cNegro
+imp_boton_F:
 		mov [boton_caracter],'F'
 		call IMPRIME_BOTON
 
@@ -1230,6 +1379,7 @@ salir:
 		mov [num1h],0
 		mov [num2h],0
 
+		call CALCULADORA_UI
 		ret 			;Regreso de llamada a procedimiento
 	endp	 			;Indica fin de procedimiento UI para el ensamblador
 
