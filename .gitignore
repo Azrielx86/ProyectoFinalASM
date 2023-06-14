@@ -1,3 +1,6 @@
 *.obj
 *.exe
 *.map
+*.OBJ
+*.EXE
+*.MAP
