@@ -293,7 +293,40 @@ mouse:
 	;;;
 	;;; COMPLETAR COMPARACIONES
 	;;;
+	; Segunda columna
+	cmp cx,30
+	jb jmp_mouse_no_clic
 
+	cmp cx,34
+	jbe botones_8_5_2_A
+
+	; Tercer columna
+	cmp cx,36
+	jb jmp_mouse_no_clic
+
+	cmp cx,40
+	jbe botones_9_6_3_B
+
+	; Cuarta columna
+	cmp cx,42
+	jb jmp_mouse_no_clic
+
+	cmp cx,46
+	jbe botones_F_E_D_C
+
+	; Quinta columna
+	cmp cx,51
+	jb jmp_mouse_no_clic
+
+	cmp cx,55
+	jbe botones_SUM_MUL_MOD
+
+	; Sexta columna
+	cmp cx,57
+	jb jmp_mouse_no_clic
+
+	cmp cx,62
+	jbe botones_MIN_DIV_EQU
 jmp_mouse_no_clic:
 	jmp mouse_no_clic
 
@@ -340,18 +373,88 @@ botones_7_4_1_0:
 
 	;Si no es ninguno de los anteriores
 	jmp mouse_no_clic
+
 botones_8_5_2_A:
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton '8'
-
+	cmp dx,9
+	jbe boton8
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton '5'
-
+	cmp dx,13
+	jbe boton5
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton '2'
-
+	cmp dx,17
+	jbe boton2
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton 'A'
+	cmp dx,21
+	jbe botonA
+
+botones_9_6_3_B:
+	;Revisar si el renglon en donde fue presionado el mouse
+	;corresponde con boton '9'
+	cmp dx,9
+	jbe boton9
+	;Revisar si el renglon en donde fue presionado el mouse
+	;corresponde con boton '6'
+	cmp dx,13
+	jbe boton6
+	;Revisar si el renglon en donde fue presionado el mouse
+	;corresponde con boton '3'
+	cmp dx,17
+	jbe boton3
+	;Revisar si el renglon en donde fue presionado el mouse
+	;corresponde con boton 'B'
+	cmp dx,21
+	jbe botonB
+
+botones_F_E_D_C:
+	;Revisar si el renglon en donde fue presionado el mouse
+	;corresponde con boton 'F'
+	cmp dx,9
+	jbe botonF
+	;Revisar si el renglon en donde fue presionado el mouse
+	;corresponde con boton 'E'
+	cmp dx,13
+	jbe botonE
+	;Revisar si el renglon en donde fue presionado el mouse
+	;corresponde con boton 'D'
+	cmp dx,17
+	jbe botonD
+	;Revisar si el renglon en donde fue presionado el mouse
+	;corresponde con boton 'C'
+	cmp dx,21
+	jbe botonC
+
+botones_SUM_MUL_MOD:
+	;Revisar si el renglon en donde fue presionado el mouse
+	;corresponde con boton 'F'
+	cmp dx,11
+	jbe botonSuma
+	;Revisar si el renglon en donde fue presionado el mouse
+	;corresponde con boton 'E'
+	cmp dx,15
+	jbe botonMult
+	;Revisar si el renglon en donde fue presionado el mouse
+	;corresponde con boton 'D'
+	cmp dx,19
+	jbe botonDivR
+
+botones_MIN_DIV_EQU:
+	;Revisar si el renglon en donde fue presionado el mouse
+	;corresponde con boton 'F'
+	cmp dx,11
+	jbe botonResta
+	;Revisar si el renglon en donde fue presionado el mouse
+	;corresponde con boton 'E'
+	cmp dx,15
+	jbe botonDivC
+	;Revisar si el renglon en donde fue presionado el mouse
+	;corresponde con boton 'D'
+	cmp dx,19
+	jbe botonIgual
 
 	;Si no es ninguno de los anteriores
 	jmp mouse_no_clic
@@ -360,29 +463,50 @@ botones_8_5_2_A:
 botonX:
 	jmp botonX_1
 boton0:
-	jmp boton0_1
+    jmp boton0_1
 boton1:
-	jmp boton1_1
+    jmp boton1_1
 boton2:
+    jmp boton2_1
 boton3:
+    jmp boton3_1
 boton4:
+    jmp boton4_1
 boton5:
+    jmp boton5_1
 boton6:
+    jmp boton6_1
 boton7:
+    jmp boton7_1
 boton8:
+    jmp boton8_1
 boton9:
+    jmp boton9_1
 botonA:
+    jmp botonA_1
 botonB:
+    jmp botonB_1
 botonC:
+    jmp botonC_1
 botonD:
+    jmp botonD_1
 botonE:
+    jmp botonE_1
 botonF:
+    jmp botonF_1
 botonSuma:
+	jmp botonSuma_1
 botonResta:
+	jmp botonResta_1
 botonMult:
+	jmp botonMult_1
 botonDivC:
+	jmp	botonDivC_1
 botonDivR:
+	jmp	botonDivR_1
 botonIgual:
+	jmp	botonIgual_1
+	; ! completar
 botonDec:
 	call LIMPIA_PANTALLA_CALC
 	jmp mouse_no_clic
@@ -403,25 +527,81 @@ botonX_3:
 	;Se cumplieron todas las condiciones
 	jmp salir
 
-;Logica para revisar si el mouse fue presionado en '1'
-;boton '1' se encuentra entre renglones 15 y 17,
-;y entre columnas 24 y 28
-boton1_1:
-	;Se cumplieron todas las condiciones
-	mov num_boton,1
-	jmp jmp_lee_oper1 		;Salto a 'jmp_lee_oper1' para procesar el numero
-
-;Salto auxiliar para hacer un salto más largo
-jmp_lee_oper1:
-	jmp lee_oper1
-
 ;Logica para revisar si el mouse fue presionado en C
 ;boton C se encuentra entre renglones 18 y 20,
 ;y entre columnas 24 y 28
 boton0_1:
 	;Agregar la logica para verificar el boton 
 	;y limpiar la pantalla de la calculadora
-	jmp mouse_no_clic
+		mov	num_boton,0
+		jmp jmp_lee_oper1
+;Logica para revisar si el mouse fue presionado en '1'
+;boton '1' se encuentra entre renglones 15 y 17,
+;y entre columnas 24 y 28
+boton1_1:
+        mov num_boton,1
+        jmp jmp_lee_oper1
+boton2_1:
+        mov num_boton,2
+        jmp jmp_lee_oper1
+boton3_1:
+        mov num_boton,3
+        jmp jmp_lee_oper1
+boton4_1:
+        mov num_boton,4
+        jmp jmp_lee_oper1
+boton5_1:
+        mov num_boton,5
+        jmp jmp_lee_oper1
+boton6_1:
+        mov num_boton,6
+        jmp jmp_lee_oper1
+boton7_1:
+        mov num_boton,7
+        jmp jmp_lee_oper1
+boton8_1:
+        mov num_boton,8
+        jmp jmp_lee_oper1
+boton9_1:
+        mov num_boton,9
+        jmp jmp_lee_oper1
+botonA_1:
+        mov num_boton,"A"
+        jmp jmp_lee_oper1
+botonB_1:
+        mov num_boton,"B"
+        jmp jmp_lee_oper1
+botonC_1:
+        mov num_boton,"C"
+        jmp jmp_lee_oper1
+botonD_1:
+        mov num_boton,"D"
+        jmp jmp_lee_oper1
+botonE_1:
+        mov num_boton,"E"
+        jmp jmp_lee_oper1
+botonF_1:
+        mov num_boton,"F"
+        jmp jmp_lee_oper1
+botonSuma_1:
+		mov operador,"+"
+		jmp mouse_no_clic
+botonResta_1:
+		mov operador,"-"
+		jmp mouse_no_clic
+botonMult_1:
+		mov operador,"*"
+		jmp mouse_no_clic
+botonDivC_1:
+		mov operador,"/"
+		jmp mouse_no_clic
+botonDivR_1:
+		mov operador,"%"
+		jmp mouse_no_clic
+botonIgual_1:
+;Salto auxiliar para hacer un salto más largo
+jmp_lee_oper1:
+	jmp lee_oper1
 
 lee_oper1:
 	cmp [operador],0	;compara el valor del operador que puede ser 0, '+', '-', '*', '/', '%'
@@ -456,16 +636,37 @@ imprime_num1:
 
 	jmp mouse_no_clic
 
+; TODO : Operacion 2
 lee_oper2:
 	cmp [conta2],4 		;compara si el contador para num2 llego al maximo
 	jae no_lee_num 		;si conta2 es mayor o igual a 4, entonces se ha alcanzado el numero de digitos
 						;y no hace nada
+	mov 	al,num_boton
+	mov		di,[conta2]
+	mov		[num2+di],al
+	inc		[conta2]
+
+	xor		di,di
+	mov		cx,[conta2]
+	mov		[ren_aux],4
+
+imprime_num2:
+	push	cx
+	mov		[col_aux],58d
+	sub		[col_aux],cl
+	posiciona_cursor [ren_aux],[col_aux]
+	mov		cl,[num2+di]
+	or		cl,30h
+	imprime_caracter_color cl,bgNegro,cBlanco
+	inc		di
+	pop		cx
+	loop	imprime_num2
 
 no_lee_num:
 	jmp mouse_no_clic
 
 
-;Si no se encontró el driver del mouse, muestra un mensaje y debe salir tecleando [enter]
+; * Si no se encontró el driver del mouse, muestra un mensaje y debe salir tecleando [enter]
 teclado:
 	mov ah,08h
 	int 21h
