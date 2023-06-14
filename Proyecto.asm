@@ -480,26 +480,76 @@ botones_MIN_DIV_EQU:
 ;se salta a la seccion correspondiente
 botonX:
 	jmp botonX_1
+
 boton0:
     jmp boton0_1
 boton1:
     jmp boton1_1
+
 boton2:
+	cmp [baseSel],baseDec
+    je boton2_is_enabled
+    cmp [baseSel],baseHex
+    jne mouse_no_clic
+boton2_is_enabled:
     jmp boton2_1
+
 boton3:
+    cmp [baseSel],baseDec
+    je boton3_is_enabled
+    cmp [baseSel],baseHex
+    jne mouse_no_clic
+boton3_is_enabled:
     jmp boton3_1
+
 boton4:
+    cmp [baseSel],baseDec
+    je boton4_is_enabled
+    cmp [baseSel],baseHex
+    jne mouse_no_clic
+boton4_is_enabled:
     jmp boton4_1
+
 boton5:
+    cmp [baseSel],baseDec
+    je boton5_is_enabled
+    cmp [baseSel],baseHex
+    jne mouse_no_clic
+boton5_is_enabled:
     jmp boton5_1
+
 boton6:
+    cmp [baseSel],baseDec
+    je boton6_is_enabled
+    cmp [baseSel],baseHex
+    jne mouse_no_clic
+boton6_is_enabled:
     jmp boton6_1
+
 boton7:
+    cmp [baseSel],baseDec
+    je boton7_is_enabled
+    cmp [baseSel],baseHex
+    jne mouse_no_clic
+boton7_is_enabled:
     jmp boton7_1
+
 boton8:
+    cmp [baseSel],baseDec
+    je boton8_is_enabled
+    cmp [baseSel],baseHex
+    jne mouse_no_clic
+boton8_is_enabled:
     jmp boton8_1
+	
 boton9:
+	cmp [baseSel],baseDec
+	je boton9_is_enabled
+	cmp [baseSel],baseHex
+	jne mouse_no_clic
+boton9_is_enabled:
     jmp boton9_1
+
 botonA:
 	cmp [baseSel],baseHex
 	jne	mouse_no_clic
@@ -1133,7 +1183,13 @@ imp_boton_F:
         ;Imprime Boton Dec
 		mov [boton_columna],17
 		mov [boton_renglon],7
+		cmp [baseSel],baseDec
+		je boton_dec_enabled
+		mov [boton_color],bgAzul
+		jmp imp_boton_dec
+boton_dec_enabled:
 		mov [boton_color],bgAzulClaro
+imp_boton_dec:
         mov [boton_caracter_color],cBlanco
 		call IMPRIME_BOTON
         inc [boton_columna]
@@ -1150,7 +1206,13 @@ imp_boton_F:
         ;Imprime Boton Hex
 		mov [boton_columna],17
 		mov [boton_renglon],11
+		cmp [baseSel],baseHex
+		je boton_hex_enabled
 		mov [boton_color],bgAzul
+		jmp imp_boton_hex
+boton_hex_enabled:
+		mov [boton_color],bgAzulClaro
+imp_boton_hex:
         mov [boton_caracter_color],cBlanco
 		call IMPRIME_BOTON
         inc [boton_columna]
@@ -1167,7 +1229,13 @@ imp_boton_F:
         ;Imprime Boton Bin
 		mov [boton_columna],17
 		mov [boton_renglon],15
+		cmp [baseSel],baseBin
+		je boton_bin_enabled
 		mov [boton_color],bgAzul
+		jmp imp_boton_bin
+boton_bin_enabled:
+		mov [boton_color],bgAzulClaro
+imp_boton_bin:
         mov [boton_caracter_color],cBlanco
 		call IMPRIME_BOTON
         inc [boton_columna]
@@ -1181,6 +1249,22 @@ imp_boton_F:
         posiciona_cursor [boton_renglon],[boton_columna]
 		imprime_caracter_color 'n',[boton_color],[boton_caracter_color]
         
+		; ? Imprime Boton Bin (Propuesta)
+		mov [boton_columna],17
+		mov [boton_renglon],19
+		mov [boton_color],bgGrisOscuro
+        mov [boton_caracter_color],cBlanco
+		call IMPRIME_BOTON
+        inc [boton_columna]
+        inc [boton_renglon]
+        posiciona_cursor [boton_renglon],[boton_columna]
+		imprime_caracter_color 'O',[boton_color],[boton_caracter_color]
+        inc [boton_columna]
+        posiciona_cursor [boton_renglon],[boton_columna]
+		imprime_caracter_color 'c',[boton_color],[boton_caracter_color]
+        inc [boton_columna]
+        posiciona_cursor [boton_renglon],[boton_columna]
+		imprime_caracter_color 't',[boton_color],[boton_caracter_color]
 
 		;Imprime un '0' inicial en la calculadora
 		posiciona_cursor 3,57d

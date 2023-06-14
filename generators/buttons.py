@@ -50,3 +50,15 @@ imp_boton_{}:
             print(string2.format(ch, ch, ch, ch, color, ch))
         else:
             print(string.format(baseSel, ch, ch, ch, color, ch))
+
+if "en-btn" in argv:
+    string = """cmp [baseSel],baseDec
+    je boton{}_is_enabled
+    cmp [baseSel],baseHex
+    jne mouse_no_clic
+boton{}_is_enabled:
+    jmp boton{}_1
+"""
+
+    for i in range(10):
+        print(string.format(i, i, i))
