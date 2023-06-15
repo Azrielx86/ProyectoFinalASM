@@ -1,3 +1,4 @@
+LOCALS @@
 title "EyPC 2023-II Grupo 2 Proyecto - Base"
 	.model small
 	.386
@@ -696,6 +697,9 @@ botonIgual_1:
 		call DIG2DEC
 		mov [num2h],ax
 
+		mov		[resultado],0000h
+		mov		[resultado + 4],0000h
+
 		cmp [operador],"+"
 		jmp	operacion_sumar
 
@@ -774,17 +778,19 @@ imprime_num2_dec:
 no_lee_num:
 	jmp mouse_no_clic
 
-; TODO : Imprimir operación
+; TODO : Imprimir operación - Convertir a dígitos
 
 operacion_sumar:
 	mov		ax,[num1h]
 	mov		bx,[num2h]
 	add		ax,bx
-	mov		[resultado],ax
-	jmp 	imprime_resultado
+	; mov		[resultado],ax
+	call 	NUM2DIG
+	mov		cx,4d
+	jmp 	imprime_resultado_prev
 
-	jmp 	mouse_no_clic
-
+imprime_resultado_prev:
+	xor		di,di
 imprime_resultado:
 	push	cx
 	mov		[col_aux],40d
@@ -1580,10 +1586,27 @@ txt2num_end:
 
 	pop			si
 	pop			cx
-	; pop			ax
 	pop			bx
 	pop      	bp
 	ret
 DIG2DEC endp
+
+NUM2DIG proc tiny ; En AX y DX estará el resultado
+	push    bp
+  	mov     bp,sp
+	mov     bx,10
+	; xor		si,si
+	mov		si,3h
+@@loop_digitos:
+	xor     dx,dx
+  	div     bx
+  	; push    dx
+	mov		byte ptr [resultado + si],dl
+	dec 	si
+  	cmp     ax,0h
+  	jne     @@loop_digitos
+  	pop     bp
+  	ret
+NUM2DIG endp
 
 end inicio
