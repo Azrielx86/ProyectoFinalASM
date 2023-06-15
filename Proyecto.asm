@@ -156,6 +156,7 @@ mil			dw		1000d
 cien 		dw 		100d
 diez		dw		10d
 dhex		dw		16d
+dbin        dw		2d
 ;Auxiliar para calculo de coordenadas del mouse
 ocho		db 		8
 ;Cuando el driver del mouse no esta disponible
@@ -687,13 +688,17 @@ botonDivR_1:
 		jmp mouse_no_clic
 botonIgual_1:
 ;Salto auxiliar para hacer un salto más largo
-		mov bx,offset num1
+		mov bx,offset num1			; Dirección en memoria del número 1
 		call DIG2DEC
 		mov	[num1h],ax
 
-		mov	bx,offset num2
+		mov	bx,offset num2			; Dirección en memoria del número 2
 		call DIG2DEC
 		mov [num2h],ax
+
+		cmp [operador],"+"
+		jmp	operacion_sumar
+
 		jmp mouse_no_clic
 jmp_lee_oper1:
 	jmp lee_oper1
@@ -769,6 +774,35 @@ imprime_num2_dec:
 no_lee_num:
 	jmp mouse_no_clic
 
+; TODO : Imprimir operación
+
+operacion_sumar:
+	mov		ax,[num1h]
+	mov		bx,[num2h]
+	add		ax,bx
+	mov		[resultado],ax
+	jmp 	imprime_resultado
+
+	jmp 	mouse_no_clic
+
+imprime_resultado:
+	push	cx
+	mov		[col_aux],40d
+    mov		[ren_aux],3
+	sub		[col_aux],cl
+	posiciona_cursor [ren_aux],[col_aux]
+	mov		cl, byte PTR [resultado + di]
+	or		cl,30h
+	cmp		cl,3Ah
+	jb		imprime_resultado_dec
+	add 	cl,07h
+imprime_resultado_dec:
+	imprime_caracter_color cl,bgNegro,cBlanco
+	inc		di
+	pop		cx
+	loop	imprime_resultado
+
+	jmp mouse_no_clic
 
 ; * Si no se encontró el driver del mouse, muestra un mensaje y debe salir tecleando [enter]
 teclado:
@@ -780,7 +814,8 @@ teclado:
 salir:
  	clear
 
-	mov ax,[num1h]
+; ! REMOVER EN LA VERSIÓN FINAL
+  mov ax,[resultado]
   mov     bp,sp
   mov     bx,10
 loop_digitos:
@@ -1515,21 +1550,27 @@ DIG2DEC proc tiny ; El número se pasará por bx
 txt2num:
 	mov			cl,[bx + si]
 	cmp			cl,0h
-	je			txt2num_end
+	je			txtbin
 
-	;! xor			cx,30h
-; 	cmp			cx,10d
-; 	jl			txtdec
+	cmp			[baseSel],baseHex
+	jne			txtdec
+	mul			[dhex]
+	add			ax,cx
+	jmp 		txt2num_end
 
-; !
-; 	cmp			[baseSel],baseHex
-; 	jne			txtdec
-; txthex:
-; 	mul			[dhex]
-; 	add			ax,cx
-
-; txtdec:
+txtdec:
+	cmp			[baseSel],baseBin
+	je			txtbin
 	mul			[diez]
+	add			ax,cx
+	jmp			txt2num_end
+
+txtbin:
+	cmp			[baseSel],baseHex
+	je			txt2num_end
+	cmp			[baseSel],baseDec
+	je			txt2num_end
+	mul			[dbin]
 	add			ax,cx
 
 txt2num_end:
