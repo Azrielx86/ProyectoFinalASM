@@ -3,12 +3,13 @@ set filename=%1
 tasm /zi %filename%.asm
 if ERRORLEVEL 1 goto end
 echo Compile sucess
-tlink /v/3 %filename%.obj
+tlink /v %filename%.obj
 if ERRORLEVEL 1 goto end
 echo Link success
 echo:
-echo:
 echo Executing program:
 echo:
-td -cTDC2.TD %filename%.exe
+copy TDC2.TD TDCONFIG.TD
+td -cTDCONFIG.TD %filename%.exe
+del TDCONFIG.TD
 :end
