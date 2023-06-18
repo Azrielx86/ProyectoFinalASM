@@ -5,3 +5,7 @@
 *.EXE
 *.MAP
 *.TR
+!TLINK.EXE
+!TD.EXE
+!TASM.EXE
+!RTM.EXE
