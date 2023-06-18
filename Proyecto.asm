@@ -138,11 +138,11 @@ baseBin		equ		2
 
 baseSel		db		0
 
+resultado	dw		0,0 			;resultado es un arreglo de 2 datos tipo word
 num1 		db 		digitos dup(0) 		;primer numero, en cada localidad guarda 1 digito, puede ser hasta 4 digitos
 num2 		db 		digitos dup(0)		;segundo numero, en cada localidad guarda 1 digito, puede ser hasta 4 digitos
 num1h		dw		0
 num2h		dw		0
-resultado	dw		0,0 			;resultado es un arreglo de 2 datos tipo word
 									;el primer dato [resultado] puede guardar el contenido del resultado para la suma, resta, cociente de division o residuo de division
 									;el segundo dato [resultado+2], en conjunto con [resultado] pueden almacenar la multiplicacion de dos numeros de 16 bits
 conta1 		dw 		0
@@ -395,6 +395,7 @@ botones_7_4_1_0:
 	;Si no es ninguno de los anteriores
 	jmp mouse_no_clic
 
+; | Agregados los demás botones
 botones_8_5_2_A:
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton '8'
@@ -589,19 +590,18 @@ botonDivR:
 	jmp	botonDivR_1
 botonIgual:
 	jmp	botonIgual_1
-	; ! completar
 botonDec:
 	mov			[baseSel],baseDec
-	call LIMPIA_PANTALLA_CALC
-	jmp mouse_no_clic
+	call 		LIMPIA_PANTALLA_CALC
+	jmp 		mouse_no_clic
 botonHex:
 	mov			[baseSel],baseHex
-	call LIMPIA_PANTALLA_CALC
-	jmp mouse_no_clic
+	call 		LIMPIA_PANTALLA_CALC
+	jmp 		mouse_no_clic
 botonBin:
 	mov			[baseSel],baseBin
-	call LIMPIA_PANTALLA_CALC
-	jmp mouse_no_clic
+	call 		LIMPIA_PANTALLA_CALC
+	jmp 		mouse_no_clic
 ;Logica para revisar si el mouse fue presionado en [X]
 ;[X] se encuentra en renglon 0 y entre columnas 76 y 79
 botonX_1:
@@ -622,90 +622,94 @@ botonX_3:
 boton0_1:
 	;Agregar la logica para verificar el boton 
 	;y limpiar la pantalla de la calculadora
-		mov	num_boton,0
-		jmp jmp_lee_oper1
+	mov	num_boton,0
+	jmp jmp_lee_oper1
 ;Logica para revisar si el mouse fue presionado en '1'
 ;boton '1' se encuentra entre renglones 15 y 17,
 ;y entre columnas 24 y 28
 boton1_1:
-        mov num_boton,1
-        jmp jmp_lee_oper1
+    mov num_boton,1
+    jmp jmp_lee_oper1
 boton2_1:
-        mov num_boton,2
-        jmp jmp_lee_oper1
+    mov num_boton,2
+    jmp jmp_lee_oper1
 boton3_1:
-        mov num_boton,3
-        jmp jmp_lee_oper1
+    mov num_boton,3
+    jmp jmp_lee_oper1
 boton4_1:
-        mov num_boton,4
-        jmp jmp_lee_oper1
+    mov num_boton,4
+    jmp jmp_lee_oper1
 boton5_1:
-        mov num_boton,5
-        jmp jmp_lee_oper1
+    mov num_boton,5
+    jmp jmp_lee_oper1
 boton6_1:
-        mov num_boton,6
-        jmp jmp_lee_oper1
+    mov num_boton,6
+    jmp jmp_lee_oper1
 boton7_1:
-        mov num_boton,7
-        jmp jmp_lee_oper1
+    mov num_boton,7
+    jmp jmp_lee_oper1
 boton8_1:
-        mov num_boton,8
-        jmp jmp_lee_oper1
+    mov num_boton,8
+    jmp jmp_lee_oper1
 boton9_1:
-        mov num_boton,9
-        jmp jmp_lee_oper1
+    mov num_boton,9
+    jmp jmp_lee_oper1
 botonA_1:
-        mov num_boton,10
-        jmp jmp_lee_oper1
+    mov num_boton,10
+    jmp jmp_lee_oper1
 botonB_1:
-        mov num_boton,11
-        jmp jmp_lee_oper1
+    mov num_boton,11
+    jmp jmp_lee_oper1
 botonC_1:
-        mov num_boton,12
-        jmp jmp_lee_oper1
+    mov num_boton,12
+    jmp jmp_lee_oper1
 botonD_1:
-        mov num_boton,13
-        jmp jmp_lee_oper1
+    mov num_boton,13
+    jmp jmp_lee_oper1
 botonE_1:
-        mov num_boton,14
-        jmp jmp_lee_oper1
+    mov num_boton,14
+    jmp jmp_lee_oper1
 botonF_1:
-        mov num_boton,15
-        jmp jmp_lee_oper1
+    mov num_boton,15
+    jmp jmp_lee_oper1
 botonSuma_1:
-		mov operador,"+"
-		jmp mouse_no_clic
+	mov operador,"+"
+	jmp mouse_no_clic
 botonResta_1:
-		mov operador,"-"
-		jmp mouse_no_clic
+	mov operador,"-"
+	jmp mouse_no_clic
 botonMult_1:
-		mov operador,"*"
-		jmp mouse_no_clic
+	mov operador,"*"
+	jmp mouse_no_clic
 botonDivC_1:
-		mov operador,"/"
-		jmp mouse_no_clic
+	mov operador,"/"
+	jmp mouse_no_clic
 botonDivR_1:
-		mov operador,"%"
-		jmp mouse_no_clic
+	mov operador,"%"
+	jmp mouse_no_clic
 botonIgual_1:
 ;Salto auxiliar para hacer un salto más largo
-		mov bx,offset num1			; Dirección en memoria del número 1
-		call DIG2DEC
-		mov	[num1h],ax
+	mov 	bx,offset num1			; Dirección en memoria del número 1
+	mov		cx,[conta1]
+	call 	DIG2DEC
+	mov		[num1h],ax
 
-		mov	bx,offset num2			; Dirección en memoria del número 2
-		call DIG2DEC
-		mov [num2h],ax
+	mov		bx,offset num2			; Dirección en memoria del número 2
+	mov		cx,[conta2]
+	call 	DIG2DEC
+	mov 	[num2h],ax
 
-		mov		[resultado],0000h
-		mov		[resultado + 4],0000h
+	mov		[resultado],0
 
-		cmp [operador],"+"
-		jmp	operacion_sumar
+	cmp 	[operador],"+"
+	je		operacion_sumar
 
-		jmp mouse_no_clic
+	cmp 	[operador],"-"
+	je 		operacion_restar
+
+	jmp 	mouse_no_clic
 jmp_lee_oper1:
-	jmp lee_oper1
+	jmp 	lee_oper1
 
 lee_oper1:
 	cmp [operador],0	;compara el valor del operador que puede ser 0, '+', '-', '*', '/', '%'
@@ -784,29 +788,52 @@ operacion_sumar:
 	mov		ax,[num1h]
 	mov		bx,[num2h]
 	add		ax,bx
-	; mov		[resultado],ax
-	call 	NUM2DIG
-	mov		cx,4d
+	; call 	NUM2DIG
+	mov		[resultado],ax
+	; En CX ya está la longitud del resultado
 	jmp 	imprime_resultado_prev
 
+operacion_restar:
+	mov		ax,[num1h]
+	mov		bx,[num2h]
+	sub		ax,bx
+	; call 	NUM2DIG
+	mov		[resultado],ax
+	jmp		imprime_resultado_prev
+
 imprime_resultado_prev:
-	xor		di,di
+	; mov     di,8h
+    ; sub     di,cx
+    ; mov cx,8h
+    xor di,di
 imprime_resultado:
 	push	cx
-	mov		[col_aux],40d
-    mov		[ren_aux],3
-	sub		[col_aux],cl
-	posiciona_cursor [ren_aux],[col_aux]
-	mov		cl, byte PTR [resultado + di]
-	or		cl,30h
-	cmp		cl,3Ah
-	jb		imprime_resultado_dec
-	add 	cl,07h
-imprime_resultado_dec:
-	imprime_caracter_color cl,bgNegro,cBlanco
-	inc		di
-	pop		cx
-	loop	imprime_resultado
+	mov		[col_aux],58
+    mov		[ren_aux],5
+loop_dig_resultado:
+
+	; sub		[col_aux],cl
+; 	posiciona_cursor [ren_aux],[col_aux]
+; 	mov		cl, byte PTR [resultado + di]
+; 	or		cl,30h
+; 	cmp		cl,3Ah
+; 	jb		imprime_resultado_dec
+; 	add 	cl,07h
+; imprime_resultado_dec:
+; 	imprime_caracter_color cl,bgNegro,cBlanco
+; 	inc		di
+; 	pop		cx
+; 	loop	imprime_resultado
+
+	mov 	[conta1],0
+	mov 	[conta2],0
+	mov 	[operador],0
+	mov 	[num_boton],0
+	mov 	[num1h],0
+	mov 	[num1],0
+	mov 	[num2h],0
+	mov 	[num2],0
+	mov		[resultado],0
 
 	jmp mouse_no_clic
 
@@ -819,29 +846,6 @@ teclado:
 
 salir:
  	clear
-
-; ! REMOVER EN LA VERSIÓN FINAL
-  mov ax,[resultado]
-  mov     bp,sp
-  mov     bx,10
-loop_digitos:
-  xor     dx,dx
-  div     bx
-  push    dx
-  cmp     ax,0h
-  jne     loop_digitos
-  mov     ax,0200h
-loop_imprimir:
-  pop     dx
-  or      dx,30h
-  int 21h
-  cmp     bp,sp
-  jne     loop_imprimir
-  mov     dx,000Ah
-  int 21h
-  add     dx,0003h
-  int 21h
-
 	mov ax,4C00h
 	int 21h
 
@@ -1540,7 +1544,7 @@ imp_boton_bin:
 	endp	 			;Indica fin de procedimiento UI para el ensamblador
 
 ; TODO : CONVERTIT DIG a NUM
-DIG2DEC proc tiny ; El número se pasará por bx
+DIG2DEC proc tiny ; El número se pasará por bx y la longitud por cx
 	push     	bp
 	mov      	bp,sp
 	push		bx
@@ -1549,14 +1553,16 @@ DIG2DEC proc tiny ; El número se pasará por bx
 	push 		si
 
 	xor			si,si
+	; mov			si,cx
 	; mov			cx,10h
 	xor			ax,ax
 
 	xor			ch,ch
 txt2num:
+	push		cx
 	mov			cl,[bx + si]
-	cmp			cl,0h
-	je			txtbin
+	; cmp			cl,0h
+	; je			txtbin
 
 	cmp			[baseSel],baseHex
 	jne			txtdec
@@ -1572,16 +1578,17 @@ txtdec:
 	jmp			txt2num_end
 
 txtbin:
-	cmp			[baseSel],baseHex
-	je			txt2num_end
-	cmp			[baseSel],baseDec
-	je			txt2num_end
+	; cmp			[baseSel],baseHex
+	; je			txt2num_end
+	; cmp			[baseSel],baseDec
+	; je			txt2num_end
 	mul			[dbin]
 	add			ax,cx
 
 txt2num_end:
 	inc			si
-	cmp			si,digitos
+	pop         cx
+	cmp			si,cx
 	jl			txt2num
 
 	pop			si
@@ -1597,12 +1604,14 @@ NUM2DIG proc tiny ; En AX y DX estará el resultado
 	mov     bx,10
 	; xor		si,si
 	mov		si,3h
+	mov     cx,0h
 @@loop_digitos:
 	xor     dx,dx
   	div     bx
   	; push    dx
 	mov		byte ptr [resultado + si],dl
 	dec 	si
+    inc 	cx
   	cmp     ax,0h
   	jne     @@loop_digitos
   	pop     bp
