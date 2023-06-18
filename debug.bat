@@ -10,5 +10,5 @@ echo:
 echo:
 echo Executing program:
 echo:
-td %filename%.exe
+td -cTDC2.TD %filename%.exe
 :end
