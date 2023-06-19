@@ -139,7 +139,7 @@ baseBin		equ		2
 resultado	dw		0,0 			;resultado es un arreglo de 2 datos tipo word
 									;el primer dato [resultado] puede guardar el contenido del resultado para la suma, resta, cociente de division o residuo de division
 									;el segundo dato [resultado+2], en conjunto con [resultado] pueden almacenar la multiplicacion de dos numeros de 16 bits
-resultadod	db 		digitos*2 dup(0)
+resultadod	db 		digitos*2 dup(0)    ; Dígitos para el resultado
 num1 		db 		digitos dup(0) 		;primer numero, en cada localidad guarda 1 digito, puede ser hasta 4 digitos
 num2 		db 		digitos dup(0)		;segundo numero, en cada localidad guarda 1 digito, puede ser hasta 4 digitos
 num1h		dw		0
@@ -802,7 +802,7 @@ operacion_sumar:
 	add		ax,bx
 	mov		[resultado],ax
 	xor		dx,dx
-	jmp 	imprime_resultado_dec
+	jmp 	imprime_resultado
 
 operacion_restar:
 	mov		ax,[num1h]
@@ -810,7 +810,7 @@ operacion_restar:
 	sub		ax,bx
 	mov		[resultado],ax
 	xor		dx,dx
-	jmp		imprime_resultado_dec
+	jmp		imprime_resultado
 
 operacion_multiplicar:
     mov     ax,[num1h]
@@ -818,7 +818,7 @@ operacion_multiplicar:
     mul     bx
     mov     [resultado],ax
     mov     [resultado + 2],dx
-    jmp     imprime_resultado_dec
+    jmp     imprime_resultado
 
 operacion_dividir:
     mov     ax,[num1h]
@@ -827,7 +827,7 @@ operacion_dividir:
     div     bx
     mov     [resultado],ax
     xor     dx,dx
-    jmp     imprime_resultado_dec
+    jmp     imprime_resultado
 
 operacion_modulo:
     mov     ax,[num1h]
@@ -836,11 +836,55 @@ operacion_modulo:
     div     bx
     mov     [resultado],dx
     xor     dx,dx
-    jmp     imprime_resultado_dec
+    jmp     imprime_resultado
+
+imprime_resultado:
+    cmp     [baseSel],baseHex
+    je      imprime_resultado_hex
+    cmp     [baseSel],baseDec
+    je      imprime_resultado_dec
+
+imprime_resultado_hex:
+    mov     [ren_aux],5
+    cmp     dx,0h
+    je      imprime_ax_hex
+
+    mov     ax,[resultado + 2]
+    mov     bx,offset resultadod
+    call    HEX2DIG
+
+imprime_ax_hex:
+    mov     ax,[resultado]
+    mov     bx,offset resultadod
+    add     bx,04h
+    call    HEX2DIG
+
+    mov     [col_aux],50d
+    mov     bx,offset resultadod
+    xor     si,si
+    mov     cx,8h
+loop_imp_hex:
+    push    bx
+    push    cx
+    posiciona_cursor [ren_aux],[col_aux]
+    pop     cx
+    pop     bx
+    mov     dl,[bx + si]
+    mov     [num_impr],dl
+    push    bx
+    push    cx
+    imprime_caracter_color [num_impr],bgNegro,cBlanco
+    pop     cx
+    pop     bx
+    inc     si
+    inc     [col_aux]
+    loop    loop_imp_hex
+
+    jmp     imprime_end
 
 imprime_resultado_dec:
     cmp     dx,0h ; Si DX es distinto de cero, hay algún residuo de la multiplicación
-    je      imprime_ax
+    je      imprime_ax_dec
     mov		[ren_aux],5
     
     div     [diezmil]
@@ -853,17 +897,17 @@ imprime_resultado_dec:
     call    IMPRIME_BX
     jmp     imprime_end
 
-imprime_ax: 
+imprime_ax_dec: 
     mov		[ren_aux],5
     mov     cx,[diezmil]
     cmp     [resultado],cx
-    jge     dm_digitos
+    jge     dm_digitos_dec
     mov     [col_aux],54d
-    jmp     imprime_ax_1
-dm_digitos:
+    jmp     imprime_ax_1_dec
+dm_digitos_dec:
     mov     [col_aux],53d
 
-imprime_ax_1:
+imprime_ax_1_dec:
     mov     bx,[resultado]
     call    IMPRIME_BX
 
@@ -877,7 +921,7 @@ imprime_end:
 	mov 	[num1],0
 	mov 	[num2h],0
 	mov 	[num2],0
-	mov		[resultado],0
+	mov     [resultado],0
 
 	jmp mouse_no_clic
 
@@ -1663,5 +1707,48 @@ imprime_4_digs:
     ret 					;intruccion ret para regresar de llamada a procedimiento
 endp
 
+
+HEX2DIG proc tiny
+    push     bp
+    mov      bp,sp
+    
+    xor     si,si
+
+    mov     cx,4h
+@@loop_digitos:
+    xor     dx,dx
+    div     [dhex]
+    push    dx
+    loop    @@loop_digitos
+    ; cmp     ax,0h
+    ; jne     @@loop_digitos
+
+@@loop_digs:
+    pop     dx
+    or      dx,30h
+    cmp     dx,3Ah
+    jl      @@save
+    add     dx,07h
+@@save:
+    mov     byte ptr [bx + si],dl
+    inc     si
+    cmp     bp,sp
+    jne     @@loop_digs
+
+    ; cmp     si,4h
+    ; jge     @@end
+
+    ; mov     cx,3h
+
+; @@zeros:
+;     mov     byte ptr [bx + si],30h
+;     inc     si
+;     loop    @@zeros
+;     sub     cx,si
+
+@@end:
+    pop      bp
+    ret
+HEX2DIG endp
 
 end inicio
