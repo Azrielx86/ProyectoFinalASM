@@ -710,6 +710,15 @@ botonIgual_1:
 	cmp 	[operador],"-"
 	je 		operacion_restar
 
+    cmp     [operador],"*"
+    je      operacion_multiplicar
+
+    cmp     [operador],"/"
+    je      operacion_dividir
+
+    cmp     [operador],"%"
+    je      operacion_modulo
+
 	jmp 	mouse_no_clic
 jmp_lee_oper1:
 	jmp 	lee_oper1
@@ -792,38 +801,73 @@ operacion_sumar:
 	mov		bx,[num2h]
 	add		ax,bx
 	mov		[resultado],ax
-	; En CX ya está la longitud del resultado
-	jmp 	imprime_resultado_prev
+	xor		dx,dx
+	jmp 	imprime_resultado_dec
 
 operacion_restar:
 	mov		ax,[num1h]
 	mov		bx,[num2h]
 	sub		ax,bx
 	mov		[resultado],ax
-	jmp		imprime_resultado_prev
+	xor		dx,dx
+	jmp		imprime_resultado_dec
 
-imprime_resultado_prev:
-	; mov     di,8h
-    ; sub     di,cx
-    ; mov cx,8h
-    xor di,di
-imprime_resultado:
-	push	cx
-	mov		[col_aux],58
-    mov		[ren_aux],5
-loop_dig_resultado:
-	sub		[col_aux],cl
-	posiciona_cursor [ren_aux],[col_aux]
-	mov		cl, byte PTR [resultado + di]
-	or		cl,30h
-	cmp		cl,3Ah
-	jb		imprime_resultado_dec
-	add 	cl,07h
+operacion_multiplicar:
+    mov     ax,[num1h]
+    mov     bx,[num2h]
+    mul     bx
+    mov     [resultado],ax
+    mov     [resultado + 2],dx
+    jmp     imprime_resultado_dec
+
+operacion_dividir:
+    mov     ax,[num1h]
+    mov     bx,[num2h]
+    xor     dx,dx
+    div     bx
+    mov     [resultado],ax
+    xor     dx,dx
+    jmp     imprime_resultado_dec
+
+operacion_modulo:
+    mov     ax,[num1h]
+    mov     bx,[num2h]
+    xor     dx,dx
+    div     bx
+    mov     [resultado],dx
+    xor     dx,dx
+    jmp     imprime_resultado_dec
+
 imprime_resultado_dec:
-	imprime_caracter_color cl,bgNegro,cBlanco
-	inc		di
-	pop		cx
-	loop	imprime_resultado
+    cmp     dx,0h ; Si DX es distinto de cero, hay algún residuo de la multiplicación
+    je      imprime_ax
+    mov		[ren_aux],5
+    
+    div     [diezmil]
+    mov     bx,dx
+    mov     [col_aux],54d
+    call    IMPRIME_BX
+
+    mov     bx,ax
+    mov     [col_aux],50d
+    call    IMPRIME_BX
+    jmp     imprime_end
+
+imprime_ax: 
+    mov		[ren_aux],5
+    mov     cx,[diezmil]
+    cmp     [resultado],cx
+    jge     dm_digitos
+    mov     [col_aux],54d
+    jmp     imprime_ax_1
+dm_digitos:
+    mov     [col_aux],53d
+
+imprime_ax_1:
+    mov     bx,[resultado]
+    call    IMPRIME_BX
+
+imprime_end:
 
 	mov 	[conta1],0
 	mov 	[conta2],0
@@ -849,587 +893,587 @@ salir:
 	mov ax,4C00h
 	int 21h
 
-	;procedimiento MARCO_UI
-	;no requiere parametros de entrada
-	;Dibuja el marco de la interfaz de usuario del programa 
-	MARCO_UI proc
-		xor di,di
-		mov cx,80d
-		mov [col_aux],0
-	marcos_horizontales:
-		push cx
-		;Imprime marco superior
-		posiciona_cursor 0,[col_aux]
-		cmp [marco_sup+di],'X'
-		je cerrar
-	superior:
-		imprime_caracter_color [marco_sup+di],bgNegro,cBlanco
-		jmp inferior
-	cerrar:
-		imprime_caracter_color [marco_sup+di],bgNegro,cRojoClaro
-	inferior:
-		;Imprime marco inferior
-		posiciona_cursor 24,[col_aux]
-		imprime_caracter_color [marco_inf+di],bgNegro,cBlanco
-		inc [col_aux]
-		inc di
-		pop cx
-		loop marcos_horizontales
-		
-		;Imprime marcos laterales
-		xor di,di
-		mov cx,23		;cx = 23d = 17h. Prepara registro CX para loop. 
-						;para imprimir los marcos laterales en pantalla, entre el segundo y el penúltimo renglones
-		mov [ren_aux],0
-	marcos_verticales:
-		push cx
-		inc [ren_aux]
-		posiciona_cursor [ren_aux],0
-		imprime_caracter_color [marco_lat],bgNegro,cBlanco
-		posiciona_cursor [ren_aux],79
-		imprime_caracter_color [marco_lat],bgNegro,cBlanco
-		pop cx
-		loop marcos_verticales
-		ret 			;Regreso de llamada a procedimiento
-	endp	 			;Indica fin de procedimiento UI para el ensamblador
+;procedimiento MARCO_UI
+;no requiere parametros de entrada
+;Dibuja el marco de la interfaz de usuario del programa 
+MARCO_UI proc
+    xor di,di
+    mov cx,80d
+    mov [col_aux],0
+marcos_horizontales:
+    push cx
+    ;Imprime marco superior
+    posiciona_cursor 0,[col_aux]
+    cmp [marco_sup+di],'X'
+    je cerrar
+superior:
+    imprime_caracter_color [marco_sup+di],bgNegro,cBlanco
+    jmp inferior
+cerrar:
+    imprime_caracter_color [marco_sup+di],bgNegro,cRojoClaro
+inferior:
+    ;Imprime marco inferior
+    posiciona_cursor 24,[col_aux]
+    imprime_caracter_color [marco_inf+di],bgNegro,cBlanco
+    inc [col_aux]
+    inc di
+    pop cx
+    loop marcos_horizontales
+    
+    ;Imprime marcos laterales
+    xor di,di
+    mov cx,23		;cx = 23d = 17h. Prepara registro CX para loop. 
+                    ;para imprimir los marcos laterales en pantalla, entre el segundo y el penúltimo renglones
+    mov [ren_aux],0
+marcos_verticales:
+    push cx
+    inc [ren_aux]
+    posiciona_cursor [ren_aux],0
+    imprime_caracter_color [marco_lat],bgNegro,cBlanco
+    posiciona_cursor [ren_aux],79
+    imprime_caracter_color [marco_lat],bgNegro,cBlanco
+    pop cx
+    loop marcos_verticales
+    ret 			;Regreso de llamada a procedimiento
+endp	 			;Indica fin de procedimiento UI para el ensamblador
 
-	;procedimiento CALCULADORA_UI
-	;no requiere parametros de entrada
-	;Dibuja el marco de la calculador en la interfaz de usuario del programa 
-	CALCULADORA_UI proc
-		xor di,di
-		mov cx,50d
-		mov [col_aux],15d
-	marcos_hor_cal:
-		push cx
-		;Imprime marco superior
-		posiciona_cursor 1,[col_aux]
-		imprime_caracter_color [marco_sup_cal+di],bgNegro,cCyanClaro
-		;Imprime marco inferior
-		posiciona_cursor 23,[col_aux]
-		imprime_caracter_color [marco_inf_cal+di],bgNegro,cCyanClaro
-		inc [col_aux]
-		inc di
-		pop cx
-		loop marcos_hor_cal
-		
-		;Imprime marcos laterales
-		xor di,di
-		mov cx,21d		;cx = 20d. Prepara registro CX para loop. 
-						;para imprimir los marcos laterales en pantalla, entre el segundo y el penúltimo renglones
-		mov [ren_aux],1
-	marcos_ver_cal:
-		push cx
-		inc [ren_aux]
-		posiciona_cursor [ren_aux],15
-		imprime_caracter_color [marco_lat_cal],bgNegro,cCyanClaro
-		posiciona_cursor [ren_aux],64
-		imprime_caracter_color [marco_lat_cal],bgNegro,cCyanClaro
-		pop cx
-		loop marcos_ver_cal
+;procedimiento CALCULADORA_UI
+;no requiere parametros de entrada
+;Dibuja el marco de la calculador en la interfaz de usuario del programa 
+CALCULADORA_UI proc
+    xor di,di
+    mov cx,50d
+    mov [col_aux],15d
+marcos_hor_cal:
+    push cx
+    ;Imprime marco superior
+    posiciona_cursor 1,[col_aux]
+    imprime_caracter_color [marco_sup_cal+di],bgNegro,cCyanClaro
+    ;Imprime marco inferior
+    posiciona_cursor 23,[col_aux]
+    imprime_caracter_color [marco_inf_cal+di],bgNegro,cCyanClaro
+    inc [col_aux]
+    inc di
+    pop cx
+    loop marcos_hor_cal
+    
+    ;Imprime marcos laterales
+    xor di,di
+    mov cx,21d		;cx = 20d. Prepara registro CX para loop. 
+                    ;para imprimir los marcos laterales en pantalla, entre el segundo y el penúltimo renglones
+    mov [ren_aux],1
+marcos_ver_cal:
+    push cx
+    inc [ren_aux]
+    posiciona_cursor [ren_aux],15
+    imprime_caracter_color [marco_lat_cal],bgNegro,cCyanClaro
+    posiciona_cursor [ren_aux],64
+    imprime_caracter_color [marco_lat_cal],bgNegro,cCyanClaro
+    pop cx
+    loop marcos_ver_cal
 
-		;Imprime marco horizontal interno
-		mov cx,48
-		mov [col_aux],16d
-	marco_hor_interno_cal:
-		push cx
-		posiciona_cursor 6,[col_aux]
-		imprime_caracter_color [marco_hint_cal],bgNegro,cCyanClaro
-		inc [col_aux]
-		pop cx
-		loop marco_hor_interno_cal
+    ;Imprime marco horizontal interno
+    mov cx,48
+    mov [col_aux],16d
+marco_hor_interno_cal:
+    push cx
+    posiciona_cursor 6,[col_aux]
+    imprime_caracter_color [marco_hint_cal],bgNegro,cCyanClaro
+    inc [col_aux]
+    pop cx
+    loop marco_hor_interno_cal
 
-		;Imprime marco vertical interno
-		mov cx,16d
-		mov [ren_aux],7
-	marco_ver_interno_cal:
-		push cx
-		posiciona_cursor [ren_aux],49
-		imprime_caracter_color [marco_vint_cal],bgNegro,cCyanClaro
-		inc [ren_aux]
-		pop cx
-		loop marco_ver_interno_cal
+    ;Imprime marco vertical interno
+    mov cx,16d
+    mov [ren_aux],7
+marco_ver_interno_cal:
+    push cx
+    posiciona_cursor [ren_aux],49
+    imprime_caracter_color [marco_vint_cal],bgNegro,cCyanClaro
+    inc [ren_aux]
+    pop cx
+    loop marco_ver_interno_cal
 
-		;Imprime intersecciones
-	marco_intersecciones:
-		;interseccion izquierda
-		posiciona_cursor 6,15
-		imprime_caracter_color [marco_cizq_cal],bgNegro,cCyanClaro
-		;interseccion derecha
-		posiciona_cursor 6,64
-		imprime_caracter_color [marco_cder_cal],bgNegro,cCyanClaro
-		;interseccion superior
-		posiciona_cursor 6,49
-		imprime_caracter_color [marco_csup_cal],bgNegro,cCyanClaro
-		;interseccion inferior
-		posiciona_cursor 23,49
-		imprime_caracter_color [marco_cinf_cal],bgNegro,cCyanClaro
+    ;Imprime intersecciones
+marco_intersecciones:
+    ;interseccion izquierda
+    posiciona_cursor 6,15
+    imprime_caracter_color [marco_cizq_cal],bgNegro,cCyanClaro
+    ;interseccion derecha
+    posiciona_cursor 6,64
+    imprime_caracter_color [marco_cder_cal],bgNegro,cCyanClaro
+    ;interseccion superior
+    posiciona_cursor 6,49
+    imprime_caracter_color [marco_csup_cal],bgNegro,cCyanClaro
+    ;interseccion inferior
+    posiciona_cursor 23,49
+    imprime_caracter_color [marco_cinf_cal],bgNegro,cCyanClaro
 
-	;Imprimir botones
-		;Imprime Boton 0
-		mov [boton_columna],24
-		mov [boton_renglon],19
-		mov [boton_color],bgMagenta
-        mov [boton_caracter_color],cBlanco
-		mov [boton_caracter],'0'
-		call IMPRIME_BOTON
+;Imprimir botones
+    ;Imprime Boton 0
+    mov [boton_columna],24
+    mov [boton_renglon],19
+    mov [boton_color],bgMagenta
+    mov [boton_caracter_color],cBlanco
+    mov [boton_caracter],'0'
+    call IMPRIME_BOTON
 
-		;Imprime Boton 1
-		mov [boton_columna],24
-		mov [boton_renglon],15
-		mov [boton_color],bgMagenta
-        mov [boton_caracter_color],cBlanco
-		mov [boton_caracter],'1'
-		call IMPRIME_BOTON
+    ;Imprime Boton 1
+    mov [boton_columna],24
+    mov [boton_renglon],15
+    mov [boton_color],bgMagenta
+    mov [boton_caracter_color],cBlanco
+    mov [boton_caracter],'1'
+    call IMPRIME_BOTON
 
-		;Imprime Boton 2
-		mov [boton_columna],30
-		mov [boton_renglon],15
-        cmp baseSel,baseHex
-        je imp_boton_2_enable
-		cmp baseSel,baseDec
-		je imp_boton_2_enable
-        mov [boton_color],bgGrisOscuro
-        mov [boton_caracter_color],cBlanco
-        jmp imp_boton_2
+    ;Imprime Boton 2
+    mov [boton_columna],30
+    mov [boton_renglon],15
+    cmp baseSel,baseHex
+    je imp_boton_2_enable
+    cmp baseSel,baseDec
+    je imp_boton_2_enable
+    mov [boton_color],bgGrisOscuro
+    mov [boton_caracter_color],cBlanco
+    jmp imp_boton_2
 imp_boton_2_enable:
-        mov [boton_color],bgCyan
-        mov [boton_caracter_color],cNegro
+    mov [boton_color],bgCyan
+    mov [boton_caracter_color],cNegro
 imp_boton_2:
-		mov [boton_caracter],'2'
-		call IMPRIME_BOTON
+    mov [boton_caracter],'2'
+    call IMPRIME_BOTON
 
-		;Imprime Boton 3
-		mov [boton_columna],36
-		mov [boton_renglon],15
-        cmp baseSel,baseHex
-        je imp_boton_3_enable
-        cmp baseSel,baseDec
-        je imp_boton_3_enable
-        mov [boton_color],bgGrisOscuro
-        mov [boton_caracter_color],cBlanco
-        jmp imp_boton_3
+    ;Imprime Boton 3
+    mov [boton_columna],36
+    mov [boton_renglon],15
+    cmp baseSel,baseHex
+    je imp_boton_3_enable
+    cmp baseSel,baseDec
+    je imp_boton_3_enable
+    mov [boton_color],bgGrisOscuro
+    mov [boton_caracter_color],cBlanco
+    jmp imp_boton_3
 imp_boton_3_enable:
-        mov [boton_color],bgCyan
-        mov [boton_caracter_color],cNegro
+    mov [boton_color],bgCyan
+    mov [boton_caracter_color],cNegro
 imp_boton_3:
-		mov [boton_caracter],'3'
-		call IMPRIME_BOTON
+    mov [boton_caracter],'3'
+    call IMPRIME_BOTON
 
-		;Imprime Boton 4
-		mov [boton_columna],24
-		mov [boton_renglon],11
-        cmp baseSel,baseHex
-        je imp_boton_4_enable
-        cmp baseSel,baseDec
-        je imp_boton_4_enable
-        mov [boton_color],bgGrisOscuro
-        mov [boton_caracter_color],cBlanco
-        jmp imp_boton_4
+    ;Imprime Boton 4
+    mov [boton_columna],24
+    mov [boton_renglon],11
+    cmp baseSel,baseHex
+    je imp_boton_4_enable
+    cmp baseSel,baseDec
+    je imp_boton_4_enable
+    mov [boton_color],bgGrisOscuro
+    mov [boton_caracter_color],cBlanco
+    jmp imp_boton_4
 imp_boton_4_enable:
-        mov [boton_color],bgCyan
-        mov [boton_caracter_color],cNegro
+    mov [boton_color],bgCyan
+    mov [boton_caracter_color],cNegro
 imp_boton_4:
-		mov [boton_caracter],'4'
-		call IMPRIME_BOTON
+    mov [boton_caracter],'4'
+    call IMPRIME_BOTON
 
-		;Imprime Boton 5
-		mov [boton_columna],30
-		mov [boton_renglon],11
-        cmp baseSel,baseHex
-        je imp_boton_5_enable
-        cmp baseSel,baseDec
-        je imp_boton_5_enable
-        mov [boton_color],bgGrisOscuro
-        mov [boton_caracter_color],cBlanco
-        jmp imp_boton_5
+    ;Imprime Boton 5
+    mov [boton_columna],30
+    mov [boton_renglon],11
+    cmp baseSel,baseHex
+    je imp_boton_5_enable
+    cmp baseSel,baseDec
+    je imp_boton_5_enable
+    mov [boton_color],bgGrisOscuro
+    mov [boton_caracter_color],cBlanco
+    jmp imp_boton_5
 imp_boton_5_enable:
-        mov [boton_color],bgCyan
-        mov [boton_caracter_color],cNegro
+    mov [boton_color],bgCyan
+    mov [boton_caracter_color],cNegro
 imp_boton_5:
-		mov [boton_caracter],'5'
-		call IMPRIME_BOTON
+    mov [boton_caracter],'5'
+    call IMPRIME_BOTON
 
-		;Imprime Boton 6
-		mov [boton_columna],36
-		mov [boton_renglon],11
-        cmp baseSel,baseHex
-        je imp_boton_6_enable
-        cmp baseSel,baseDec
-        je imp_boton_6_enable
-        mov [boton_color],bgGrisOscuro
-        mov [boton_caracter_color],cBlanco
-        jmp imp_boton_6
+    ;Imprime Boton 6
+    mov [boton_columna],36
+    mov [boton_renglon],11
+    cmp baseSel,baseHex
+    je imp_boton_6_enable
+    cmp baseSel,baseDec
+    je imp_boton_6_enable
+    mov [boton_color],bgGrisOscuro
+    mov [boton_caracter_color],cBlanco
+    jmp imp_boton_6
 imp_boton_6_enable:
-        mov [boton_color],bgCyan
-        mov [boton_caracter_color],cNegro
+    mov [boton_color],bgCyan
+    mov [boton_caracter_color],cNegro
 imp_boton_6:
-		mov [boton_caracter],'6'
-		call IMPRIME_BOTON
+    mov [boton_caracter],'6'
+    call IMPRIME_BOTON
 
-		;Imprime Boton 7
-		mov [boton_columna],24
-		mov [boton_renglon],7
-        cmp baseSel,baseHex
-        je imp_boton_7_enable
-        cmp baseSel,baseDec
-        je imp_boton_7_enable
-        mov [boton_color],bgGrisOscuro
-        mov [boton_caracter_color],cBlanco
-        jmp imp_boton_7
+    ;Imprime Boton 7
+    mov [boton_columna],24
+    mov [boton_renglon],7
+    cmp baseSel,baseHex
+    je imp_boton_7_enable
+    cmp baseSel,baseDec
+    je imp_boton_7_enable
+    mov [boton_color],bgGrisOscuro
+    mov [boton_caracter_color],cBlanco
+    jmp imp_boton_7
 imp_boton_7_enable:
-        mov [boton_color],bgCyan
-        mov [boton_caracter_color],cNegro
+    mov [boton_color],bgCyan
+    mov [boton_caracter_color],cNegro
 imp_boton_7:
-		mov [boton_caracter],'7'
-		call IMPRIME_BOTON
+    mov [boton_caracter],'7'
+    call IMPRIME_BOTON
 
-		;Imprime Boton 8
-		mov [boton_columna],30
-		mov [boton_renglon],7
-        cmp baseSel,baseHex
-        je imp_boton_8_enable
-        cmp baseSel,baseDec
-        je imp_boton_8_enable
-        mov [boton_color],bgGrisOscuro
-        mov [boton_caracter_color],cBlanco
-        jmp imp_boton_8
+    ;Imprime Boton 8
+    mov [boton_columna],30
+    mov [boton_renglon],7
+    cmp baseSel,baseHex
+    je imp_boton_8_enable
+    cmp baseSel,baseDec
+    je imp_boton_8_enable
+    mov [boton_color],bgGrisOscuro
+    mov [boton_caracter_color],cBlanco
+    jmp imp_boton_8
 imp_boton_8_enable:
-        mov [boton_color],bgCyan
-        mov [boton_caracter_color],cNegro
+    mov [boton_color],bgCyan
+    mov [boton_caracter_color],cNegro
 imp_boton_8:
-		mov [boton_caracter],'8'
-		call IMPRIME_BOTON
+    mov [boton_caracter],'8'
+    call IMPRIME_BOTON
 
-		;Imprime Boton 9
-		mov [boton_columna],36
-		mov [boton_renglon],7
-        cmp baseSel,baseHex
-        je imp_boton_9_enable
-        cmp baseSel,baseDec
-        je imp_boton_9_enable
-        mov [boton_color],bgGrisOscuro
-        mov [boton_caracter_color],cBlanco
-        jmp imp_boton_9
+    ;Imprime Boton 9
+    mov [boton_columna],36
+    mov [boton_renglon],7
+    cmp baseSel,baseHex
+    je imp_boton_9_enable
+    cmp baseSel,baseDec
+    je imp_boton_9_enable
+    mov [boton_color],bgGrisOscuro
+    mov [boton_caracter_color],cBlanco
+    jmp imp_boton_9
 imp_boton_9_enable:
-        mov [boton_color],bgCyan
-        mov [boton_caracter_color],cNegro
+    mov [boton_color],bgCyan
+    mov [boton_caracter_color],cNegro
 imp_boton_9:
-		mov [boton_caracter],'9'
-		call IMPRIME_BOTON
+    mov [boton_caracter],'9'
+    call IMPRIME_BOTON
 
-		;Imprime Boton A
-		mov [boton_columna],30
-		mov [boton_renglon],19
-		cmp	baseSel,baseHex
-		je	imp_boton_A_enable
-		mov [boton_color],bgGrisOscuro
-		mov [boton_caracter_color],cBlanco
-		jmp imp_boton_A
+    ;Imprime Boton A
+    mov [boton_columna],30
+    mov [boton_renglon],19
+    cmp	baseSel,baseHex
+    je	imp_boton_A_enable
+    mov [boton_color],bgGrisOscuro
+    mov [boton_caracter_color],cBlanco
+    jmp imp_boton_A
 imp_boton_A_enable:
-		mov [boton_color],bgVerde
-        mov [boton_caracter_color],cNegro
+    mov [boton_color],bgVerde
+    mov [boton_caracter_color],cNegro
 imp_boton_A:
-		mov [boton_caracter],'A'
-		call IMPRIME_BOTON
+    mov [boton_caracter],'A'
+    call IMPRIME_BOTON
 
-		;Imprime Boton B
-		mov [boton_columna],36
-		mov [boton_renglon],19
-		cmp	baseSel,baseHex
-		je	imp_boton_B_enable
-		mov [boton_color],bgGrisOscuro
-		mov [boton_caracter_color],cBlanco
-		jmp imp_boton_B
+    ;Imprime Boton B
+    mov [boton_columna],36
+    mov [boton_renglon],19
+    cmp	baseSel,baseHex
+    je	imp_boton_B_enable
+    mov [boton_color],bgGrisOscuro
+    mov [boton_caracter_color],cBlanco
+    jmp imp_boton_B
 imp_boton_B_enable:
-		mov [boton_color],bgVerde
-        mov [boton_caracter_color],cNegro
+    mov [boton_color],bgVerde
+    mov [boton_caracter_color],cNegro
 imp_boton_B:
-		mov [boton_caracter],'B'
-		call IMPRIME_BOTON
+    mov [boton_caracter],'B'
+    call IMPRIME_BOTON
 
-		;Imprime Boton C
-		mov [boton_columna],42
-		mov [boton_renglon],19
-        cmp     baseSel,baseHex
-        je      imp_boton_C_enable
-        mov [boton_color],bgGrisOscuro
-        mov [boton_caracter_color],cBlanco
-        jmp imp_boton_C
+    ;Imprime Boton C
+    mov [boton_columna],42
+    mov [boton_renglon],19
+    cmp     baseSel,baseHex
+    je      imp_boton_C_enable
+    mov [boton_color],bgGrisOscuro
+    mov [boton_caracter_color],cBlanco
+    jmp imp_boton_C
 imp_boton_C_enable:
-        mov [boton_color],bgVerde
-        mov [boton_caracter_color],cNegro
+    mov [boton_color],bgVerde
+    mov [boton_caracter_color],cNegro
 imp_boton_C:
-		mov [boton_caracter],'C'
-		call IMPRIME_BOTON
+    mov [boton_caracter],'C'
+    call IMPRIME_BOTON
 
-		;Imprime Boton D
-		mov [boton_columna],42
-		mov [boton_renglon],15
-        cmp     baseSel,baseHex
-        je      imp_boton_D_enable
-        mov [boton_color],bgGrisOscuro
-        mov [boton_caracter_color],cBlanco
-        jmp imp_boton_D
+    ;Imprime Boton D
+    mov [boton_columna],42
+    mov [boton_renglon],15
+    cmp     baseSel,baseHex
+    je      imp_boton_D_enable
+    mov [boton_color],bgGrisOscuro
+    mov [boton_caracter_color],cBlanco
+    jmp imp_boton_D
 imp_boton_D_enable:
-        mov [boton_color],bgVerde
-        mov [boton_caracter_color],cNegro
+    mov [boton_color],bgVerde
+    mov [boton_caracter_color],cNegro
 imp_boton_D:
-		mov [boton_caracter],'D'
-		call IMPRIME_BOTON
+    mov [boton_caracter],'D'
+    call IMPRIME_BOTON
 
-		;Imprime Boton E
-		mov [boton_columna],42
-		mov [boton_renglon],11
-        cmp     baseSel,baseHex
-        je      imp_boton_E_enable
-        mov [boton_color],bgGrisOscuro
-        mov [boton_caracter_color],cBlanco
-        jmp imp_boton_E
+    ;Imprime Boton E
+    mov [boton_columna],42
+    mov [boton_renglon],11
+    cmp     baseSel,baseHex
+    je      imp_boton_E_enable
+    mov [boton_color],bgGrisOscuro
+    mov [boton_caracter_color],cBlanco
+    jmp imp_boton_E
 imp_boton_E_enable:
-        mov [boton_color],bgVerde
-        mov [boton_caracter_color],cNegro
+    mov [boton_color],bgVerde
+    mov [boton_caracter_color],cNegro
 imp_boton_E:
-		mov [boton_caracter],'E'
-		call IMPRIME_BOTON
+    mov [boton_caracter],'E'
+    call IMPRIME_BOTON
 
-        ;Imprime Boton F
-		mov [boton_columna],42
-		mov [boton_renglon],7
-        cmp     baseSel,baseHex
-        je      imp_boton_F_enable
-        mov [boton_color],bgGrisOscuro
-        mov [boton_caracter_color],cBlanco
-        jmp imp_boton_F
+    ;Imprime Boton F
+    mov [boton_columna],42
+    mov [boton_renglon],7
+    cmp     baseSel,baseHex
+    je      imp_boton_F_enable
+    mov [boton_color],bgGrisOscuro
+    mov [boton_caracter_color],cBlanco
+    jmp imp_boton_F
 imp_boton_F_enable:
-        mov [boton_color],bgVerde
-        mov [boton_caracter_color],cNegro
+    mov [boton_color],bgVerde
+    mov [boton_caracter_color],cNegro
 imp_boton_F:
-		mov [boton_caracter],'F'
-		call IMPRIME_BOTON
+    mov [boton_caracter],'F'
+    call IMPRIME_BOTON
 
-		;Imprime Boton +
-		mov [boton_columna],51
-		mov [boton_renglon],9
-		mov [boton_color],bgAmarillo
-        mov [boton_caracter_color],cRojo
-		mov [boton_caracter],'+'
-		call IMPRIME_BOTON
+    ;Imprime Boton +
+    mov [boton_columna],51
+    mov [boton_renglon],9
+    mov [boton_color],bgAmarillo
+    mov [boton_caracter_color],cRojo
+    mov [boton_caracter],'+'
+    call IMPRIME_BOTON
 
-		;Imprime Boton -
-		mov [boton_columna],58
-		mov [boton_renglon],9
-		mov [boton_color],bgAmarillo
-        mov [boton_caracter_color],cRojo
-		mov [boton_caracter],'-'
-		call IMPRIME_BOTON
+    ;Imprime Boton -
+    mov [boton_columna],58
+    mov [boton_renglon],9
+    mov [boton_color],bgAmarillo
+    mov [boton_caracter_color],cRojo
+    mov [boton_caracter],'-'
+    call IMPRIME_BOTON
 
-		;Imprime Boton *
-		mov [boton_columna],51
-		mov [boton_renglon],13
-		mov [boton_color],bgAmarillo
-        mov [boton_caracter_color],cRojo
-		mov [boton_caracter],'*'
-		call IMPRIME_BOTON
+    ;Imprime Boton *
+    mov [boton_columna],51
+    mov [boton_renglon],13
+    mov [boton_color],bgAmarillo
+    mov [boton_caracter_color],cRojo
+    mov [boton_caracter],'*'
+    call IMPRIME_BOTON
 
-		;Imprime Boton /
-		mov [boton_columna],58
-		mov [boton_renglon],13
-		mov [boton_color],bgAmarillo
-        mov [boton_caracter_color],cRojo
-		mov [boton_caracter],'/'
-		call IMPRIME_BOTON
+    ;Imprime Boton /
+    mov [boton_columna],58
+    mov [boton_renglon],13
+    mov [boton_color],bgAmarillo
+    mov [boton_caracter_color],cRojo
+    mov [boton_caracter],'/'
+    call IMPRIME_BOTON
 
-		;Imprime Boton %
-		mov [boton_columna],51
-		mov [boton_renglon],17
-		mov [boton_color],bgAmarillo
-        mov [boton_caracter_color],cRojo
-		mov [boton_caracter],'%'
-		call IMPRIME_BOTON
+    ;Imprime Boton %
+    mov [boton_columna],51
+    mov [boton_renglon],17
+    mov [boton_color],bgAmarillo
+    mov [boton_caracter_color],cRojo
+    mov [boton_caracter],'%'
+    call IMPRIME_BOTON
 
-		;Imprime Boton =
-		mov [boton_columna],58
-		mov [boton_renglon],17
-		mov [boton_color],bgRojo
-        mov [boton_caracter_color],cNegro
-		mov [boton_caracter],'='
-		call IMPRIME_BOTON
+    ;Imprime Boton =
+    mov [boton_columna],58
+    mov [boton_renglon],17
+    mov [boton_color],bgRojo
+    mov [boton_caracter_color],cNegro
+    mov [boton_caracter],'='
+    call IMPRIME_BOTON
 
-        ;Imprime Boton Dec
-		mov [boton_columna],17
-		mov [boton_renglon],7
-		cmp [baseSel],baseDec
-		je boton_dec_enabled
-		mov [boton_color],bgAzul
-		jmp imp_boton_dec
+    ;Imprime Boton Dec
+    mov [boton_columna],17
+    mov [boton_renglon],7
+    cmp [baseSel],baseDec
+    je boton_dec_enabled
+    mov [boton_color],bgAzul
+    jmp imp_boton_dec
 boton_dec_enabled:
-		mov [boton_color],bgAzulClaro
+    mov [boton_color],bgAzulClaro
 imp_boton_dec:
-        mov [boton_caracter_color],cBlanco
-		call IMPRIME_BOTON
-        inc [boton_columna]
-        inc [boton_renglon]
-        posiciona_cursor [boton_renglon],[boton_columna]
-		imprime_caracter_color 'D',[boton_color],[boton_caracter_color]
-        inc [boton_columna]
-        posiciona_cursor [boton_renglon],[boton_columna]
-		imprime_caracter_color 'e',[boton_color],[boton_caracter_color]
-        inc [boton_columna]
-        posiciona_cursor [boton_renglon],[boton_columna]
-		imprime_caracter_color 'c',[boton_color],[boton_caracter_color]
+    mov [boton_caracter_color],cBlanco
+    call IMPRIME_BOTON
+    inc [boton_columna]
+    inc [boton_renglon]
+    posiciona_cursor [boton_renglon],[boton_columna]
+    imprime_caracter_color 'D',[boton_color],[boton_caracter_color]
+    inc [boton_columna]
+    posiciona_cursor [boton_renglon],[boton_columna]
+    imprime_caracter_color 'e',[boton_color],[boton_caracter_color]
+    inc [boton_columna]
+    posiciona_cursor [boton_renglon],[boton_columna]
+    imprime_caracter_color 'c',[boton_color],[boton_caracter_color]
 
-        ;Imprime Boton Hex
-		mov [boton_columna],17
-		mov [boton_renglon],11
-		cmp [baseSel],baseHex
-		je boton_hex_enabled
-		mov [boton_color],bgAzul
-		jmp imp_boton_hex
+    ;Imprime Boton Hex
+    mov [boton_columna],17
+    mov [boton_renglon],11
+    cmp [baseSel],baseHex
+    je boton_hex_enabled
+    mov [boton_color],bgAzul
+    jmp imp_boton_hex
 boton_hex_enabled:
-		mov [boton_color],bgAzulClaro
+    mov [boton_color],bgAzulClaro
 imp_boton_hex:
-        mov [boton_caracter_color],cBlanco
-		call IMPRIME_BOTON
-        inc [boton_columna]
-        inc [boton_renglon]
-        posiciona_cursor [boton_renglon],[boton_columna]
-		imprime_caracter_color 'H',[boton_color],[boton_caracter_color]
-        inc [boton_columna]
-        posiciona_cursor [boton_renglon],[boton_columna]
-		imprime_caracter_color 'e',[boton_color],[boton_caracter_color]
-        inc [boton_columna]
-        posiciona_cursor [boton_renglon],[boton_columna]
-		imprime_caracter_color 'x',[boton_color],[boton_caracter_color]
+    mov [boton_caracter_color],cBlanco
+    call IMPRIME_BOTON
+    inc [boton_columna]
+    inc [boton_renglon]
+    posiciona_cursor [boton_renglon],[boton_columna]
+    imprime_caracter_color 'H',[boton_color],[boton_caracter_color]
+    inc [boton_columna]
+    posiciona_cursor [boton_renglon],[boton_columna]
+    imprime_caracter_color 'e',[boton_color],[boton_caracter_color]
+    inc [boton_columna]
+    posiciona_cursor [boton_renglon],[boton_columna]
+    imprime_caracter_color 'x',[boton_color],[boton_caracter_color]
 
-        ;Imprime Boton Bin
-		mov [boton_columna],17
-		mov [boton_renglon],15
-		cmp [baseSel],baseBin
-		je boton_bin_enabled
-		mov [boton_color],bgAzul
-		jmp imp_boton_bin
+    ;Imprime Boton Bin
+    mov [boton_columna],17
+    mov [boton_renglon],15
+    cmp [baseSel],baseBin
+    je boton_bin_enabled
+    mov [boton_color],bgAzul
+    jmp imp_boton_bin
 boton_bin_enabled:
-		mov [boton_color],bgAzulClaro
+    mov [boton_color],bgAzulClaro
 imp_boton_bin:
-        mov [boton_caracter_color],cBlanco
-		call IMPRIME_BOTON
-        inc [boton_columna]
-        inc [boton_renglon]
-        posiciona_cursor [boton_renglon],[boton_columna]
-		imprime_caracter_color 'B',[boton_color],[boton_caracter_color]
-        inc [boton_columna]
-        posiciona_cursor [boton_renglon],[boton_columna]
-		imprime_caracter_color 'i',[boton_color],[boton_caracter_color]
-        inc [boton_columna]
-        posiciona_cursor [boton_renglon],[boton_columna]
-		imprime_caracter_color 'n',[boton_color],[boton_caracter_color]
-        
-		; ? Imprime Boton Bin (Propuesta)
-		mov [boton_columna],17
-		mov [boton_renglon],19
-		mov [boton_color],bgGrisOscuro
-        mov [boton_caracter_color],cBlanco
-		call IMPRIME_BOTON
-        inc [boton_columna]
-        inc [boton_renglon]
-        posiciona_cursor [boton_renglon],[boton_columna]
-		imprime_caracter_color 'O',[boton_color],[boton_caracter_color]
-        inc [boton_columna]
-        posiciona_cursor [boton_renglon],[boton_columna]
-		imprime_caracter_color 'c',[boton_color],[boton_caracter_color]
-        inc [boton_columna]
-        posiciona_cursor [boton_renglon],[boton_columna]
-		imprime_caracter_color 't',[boton_color],[boton_caracter_color]
+    mov [boton_caracter_color],cBlanco
+    call IMPRIME_BOTON
+    inc [boton_columna]
+    inc [boton_renglon]
+    posiciona_cursor [boton_renglon],[boton_columna]
+    imprime_caracter_color 'B',[boton_color],[boton_caracter_color]
+    inc [boton_columna]
+    posiciona_cursor [boton_renglon],[boton_columna]
+    imprime_caracter_color 'i',[boton_color],[boton_caracter_color]
+    inc [boton_columna]
+    posiciona_cursor [boton_renglon],[boton_columna]
+    imprime_caracter_color 'n',[boton_color],[boton_caracter_color]
+    
+    ; ? Imprime Boton Bin (Propuesta)
+    mov [boton_columna],17
+    mov [boton_renglon],19
+    mov [boton_color],bgGrisOscuro
+    mov [boton_caracter_color],cBlanco
+    call IMPRIME_BOTON
+    inc [boton_columna]
+    inc [boton_renglon]
+    posiciona_cursor [boton_renglon],[boton_columna]
+    imprime_caracter_color 'O',[boton_color],[boton_caracter_color]
+    inc [boton_columna]
+    posiciona_cursor [boton_renglon],[boton_columna]
+    imprime_caracter_color 'c',[boton_color],[boton_caracter_color]
+    inc [boton_columna]
+    posiciona_cursor [boton_renglon],[boton_columna]
+    imprime_caracter_color 't',[boton_color],[boton_caracter_color]
 
-		;Imprime un '0' inicial en la calculadora
-		posiciona_cursor 3,57d
-		imprime_caracter_color '0',bgNegro,cBlanco
-		ret 			;Regreso de llamada a procedimiento
-	endp	 			;Indica fin de procedimiento UI para el ensamblador
+    ;Imprime un '0' inicial en la calculadora
+    posiciona_cursor 3,57d
+    imprime_caracter_color '0',bgNegro,cBlanco
+    ret 			;Regreso de llamada a procedimiento
+endp	 			;Indica fin de procedimiento UI para el ensamblador
 
-    ;procedimiento IMPRIME_BOTON
-	;Dibuja un boton que abarca 3 renglones y 5 columnas
-	;con un caracter centrado dentro del boton
-	;en la posición que se especifique (esquina superior izquierda)
-	;y de un color especificado
-	;Utiliza paso de parametros por variables globales
-	;Las variables utilizadas son:
-	;boton_caracter: debe contener el caracter que va a mostrar el boton
-	;boton_renglon: contiene la posicion del renglon en donde inicia el boton
-	;boton_columna: contiene la posicion de la columna en donde inicia el boton
-	;boton_color: contiene el color del boton
-	IMPRIME_BOTON proc
-	 	;background de botón
-		mov bh,[boton_color]	 	;Color del botón
-        xor bh,[boton_caracter_color]	 	;Color del botón
-		;Posicion superior izquierda de donde comienza el boton
-        mov ch,[boton_renglon]
-		mov cl,[boton_columna]
-        ;Posicion inferior derecha de donde termina el boton
-		mov dh,ch
-		add dh,2
-		mov dl,cl
-		add dl,4
-		mov ax,0600h 		    ;AH=06h (scroll up window) AL=00h (borrar)
-		int 10h                 ;int 10h opción 06h. Establece el color de fondo en pantalla, con los atributos dados, 
-                                ;especificando CX: esquina superior izquierda CH: renglon, CL: columna y 
-                                ;DX: esquina inferior derecha, DH: renglon y DL: columna
-		;Mover al centro de la posición actual para imprimir el caracter
-        mov [col_aux],dl
-		mov [ren_aux],dh
-		sub [col_aux],2
-		sub [ren_aux],1
-		posiciona_cursor [ren_aux],[col_aux]
-		imprime_caracter_color [boton_caracter],[boton_color],[boton_caracter_color]
-	 	ret 			;Regreso de llamada a procedimiento
-	endp	 			;Indica fin de procedimiento IMPRIME_BOTON para el ensamblador
+;procedimiento IMPRIME_BOTON
+;Dibuja un boton que abarca 3 renglones y 5 columnas
+;con un caracter centrado dentro del boton
+;en la posición que se especifique (esquina superior izquierda)
+;y de un color especificado
+;Utiliza paso de parametros por variables globales
+;Las variables utilizadas son:
+;boton_caracter: debe contener el caracter que va a mostrar el boton
+;boton_renglon: contiene la posicion del renglon en donde inicia el boton
+;boton_columna: contiene la posicion de la columna en donde inicia el boton
+;boton_color: contiene el color del boton
+IMPRIME_BOTON proc
+    ;background de botón
+    mov bh,[boton_color]	 	;Color del botón
+    xor bh,[boton_caracter_color]	 	;Color del botón
+    ;Posicion superior izquierda de donde comienza el boton
+    mov ch,[boton_renglon]
+    mov cl,[boton_columna]
+    ;Posicion inferior derecha de donde termina el boton
+    mov dh,ch
+    add dh,2
+    mov dl,cl
+    add dl,4
+    mov ax,0600h 		    ;AH=06h (scroll up window) AL=00h (borrar)
+    int 10h                 ;int 10h opción 06h. Establece el color de fondo en pantalla, con los atributos dados, 
+                            ;especificando CX: esquina superior izquierda CH: renglon, CL: columna y 
+                            ;DX: esquina inferior derecha, DH: renglon y DL: columna
+    ;Mover al centro de la posición actual para imprimir el caracter
+    mov [col_aux],dl
+    mov [ren_aux],dh
+    sub [col_aux],2
+    sub [ren_aux],1
+    posiciona_cursor [ren_aux],[col_aux]
+    imprime_caracter_color [boton_caracter],[boton_color],[boton_caracter_color]
+    ret 			;Regreso de llamada a procedimiento
+endp	 			;Indica fin de procedimiento IMPRIME_BOTON para el ensamblador
 
 
-	;procedimiento LIMPIA_PANTALLA_CALC
-	;no requiere parametros de entrada
-	;"Borra" el contenido de lo que se encuentra en la pantalla de la calculadora
-	LIMPIA_PANTALLA_CALC proc
-		mov cx,4d
-	limpia_num1_y_num2:
-		push cx
-		mov [col_aux],58d
-		sub [col_aux],cl
-		posiciona_cursor 3,[col_aux]
-		imprime_caracter_color ' ',bgNegro,cNegro
-		posiciona_cursor 4,[col_aux]
-		imprime_caracter_color ' ',bgNegro,cNegro
-		pop cx
-		loop limpia_num1_y_num2
+;procedimiento LIMPIA_PANTALLA_CALC
+;no requiere parametros de entrada
+;"Borra" el contenido de lo que se encuentra en la pantalla de la calculadora
+LIMPIA_PANTALLA_CALC proc
+    mov cx,4d
+limpia_num1_y_num2:
+    push cx
+    mov [col_aux],58d
+    sub [col_aux],cl
+    posiciona_cursor 3,[col_aux]
+    imprime_caracter_color ' ',bgNegro,cNegro
+    posiciona_cursor 4,[col_aux]
+    imprime_caracter_color ' ',bgNegro,cNegro
+    pop cx
+    loop limpia_num1_y_num2
 
-	limpia_operador:
-		posiciona_cursor 4,52d
-		imprime_caracter_color ' ',bgNegro,cNegro
+limpia_operador:
+    posiciona_cursor 4,52d
+    imprime_caracter_color ' ',bgNegro,cNegro
 
-		mov cx,10d
-	limpia_resultado:
-		push cx
-		mov [col_aux],58d
-		sub [col_aux],cl
-		posiciona_cursor 5,[col_aux]
-		imprime_caracter_color ' ',bgNegro,cNegro
-		pop cx
-		loop limpia_resultado
+    mov cx,10d
+limpia_resultado:
+    push cx
+    mov [col_aux],58d
+    sub [col_aux],cl
+    posiciona_cursor 5,[col_aux]
+    imprime_caracter_color ' ',bgNegro,cNegro
+    pop cx
+    loop limpia_resultado
 
-		posiciona_cursor 3,57d
-		imprime_caracter_color '0',bgNegro,cBlanco
+    posiciona_cursor 3,57d
+    imprime_caracter_color '0',bgNegro,cBlanco
 
-		;Reinicia valores de variables utilizadas
-		mov [conta1],0
-		mov [conta2],0
-		mov [operador],0
-		mov [num_boton],0
-		mov [num1h],0
-		mov [num2h],0
+    ;Reinicia valores de variables utilizadas
+    mov [conta1],0
+    mov [conta2],0
+    mov [operador],0
+    mov [num_boton],0
+    mov [num1h],0
+    mov [num2h],0
 
-		call CALCULADORA_UI
-		ret 			;Regreso de llamada a procedimiento
-	endp	 			;Indica fin de procedimiento UI para el ensamblador
+    call CALCULADORA_UI
+    ret 			;Regreso de llamada a procedimiento
+endp	 			;Indica fin de procedimiento UI para el ensamblador
 
 ; TODO : CONVERTIT DIG a NUM
 DIG2DEC proc tiny ; El número se pasará por bx y la longitud por cx
@@ -1505,5 +1549,119 @@ NUM2DIG proc tiny ; En AX y DX estará el resultado
   	pop     bp
   	ret
 NUM2DIG endp
+
+;procedimiento IMPRIME_BX
+;Imprime un numero entero decimal guardado en BX
+;Se pasa un numero a traves del registro BX que se va a imprimir con 4 o 5 digitos
+;Si BX es menor a 10000, imprime 4 digitos, si no imprime 5 digitos
+;Antes de llamar el procedimiento, se requiere definir la posicion en pantalla
+;a partir de la cual comienza la impresion del numero con ayuda de las variables [ren_aux] y [col_aux]
+;[ren_aux] para el renglon (entre 0 y 24)
+;[col_aux] para la columna (entre 0 y 79)
+IMPRIME_BX	proc 
+;Antes de comenzar, se guarda un respaldo de los registros
+; CX, DX, AX en la pila
+;Al terminar el procedimiento, se recuperan estos valores
+    push cx
+    push dx
+    push ax
+;Calcula digito de decenas de millar
+    mov cx,bx
+    cmp bx,10000d
+    jb imprime_4_digs
+    mov ax,bx 				;pasa el valor de BX a AX para division de 16 bits
+    xor dx,dx 				;limpia registro DX, para extender AX a 32 bits
+    div [diezmil]			;Division de 16 bits => AX=cociente, DX=residuo
+                            ;El cociente contendrá el valor del dígito que puede ser entre 0 y 9. 
+                            ;Por lo tanto, AX=000Xh => AH=00h y AL=0Xh, donde X es un dígito entre 0 y 9
+                            ;Asumimos que el digito ya esta en AL
+                            ;El residuo se utilizara para los siguientes digitos
+    mov cx,dx 				;Guardamos el residuo anterior en un registro disponible para almacenarlo temporalmente
+                            ;debido a que modificaremos DX antes de usar ese residuo
+    ;Imprime el digito decenas de millar 
+    add al,30h				;Pasa el digito en AL a su valor ASCII
+    mov [num_impr],al 		;Pasa el digito a una variable de memoria ya que AL se modifica en las siguientes macros
+    push cx
+    posiciona_cursor [ren_aux],[col_aux]
+    imprime_caracter_color [num_impr],bgNegro,cBlanco	
+    pop cx
+    inc [col_aux] 			;Recorre a la siguiente columna para imprimir el siguiente digito
+
+imprime_4_digs:
+;Calcula digito de unidades de millar
+    mov ax,cx 				;Recuperamos el residuo de la division anterior y preparamos AX para hacer division
+    xor dx,dx 				;limpia registro DX, para extender AX a 32 bits
+    div [mil]				;Division de 16 bits => AX=cociente, DX=residuo
+                            ;El cociente contendrá el valor del dígito que puede ser entre 0 y 9. 
+                            ;Por lo tanto, AX=000Xh => AH=00h y AL=0Xh, donde X es un dígito entre 0 y 9
+                            ;Asumimos que el digito ya esta en AL
+                            ;El residuo se utilizara para los siguientes digitos
+    mov cx,dx 				;Guardamos el residuo anterior en un registro disponible para almacenarlo temporalmente
+                            ;debido a que modificaremos DX antes de usar ese residuo
+    ;Imprime el digito unidades de millar
+    add al,30h				;Pasa el digito en AL a su valor ASCII
+    mov [num_impr],al 		;Pasa el digito a una variable de memoria ya que AL se modifica en las siguientes macros
+    push cx
+    posiciona_cursor [ren_aux],[col_aux]
+    imprime_caracter_color [num_impr],bgNegro,cBlanco		
+    pop cx
+    inc [col_aux] 			;Recorre a la siguiente columna para imprimir el siguiente digito
+
+;Calcula digito de centenas
+    mov ax,cx 				;Recuperamos el residuo de la division anterior y preparamos AX para hacer division
+    xor dx,dx 				;limpia registro DX, para extender AX a 32 bits
+    div [cien]				;Division de 16 bits => AX=cociente, DX=residuo
+                            ;El cociente contendrá el valor del dígito que puede ser entre 0 y 9. 
+                            ;Por lo tanto, AX=000Xh => AH=00h y AL=0Xh, donde X es un dígito entre 0 y 9
+                            ;Asumimos que el digito ya esta en AL
+                            ;El residuo se utilizara para los siguientes digitos
+    mov cx,dx 				;Guardamos el residuo anterior en un registro disponible para almacenarlo temporalmente
+                            ;debido a que modificaremos DX antes de usar ese residuo
+    ;Imprime el digito de centenas
+    add al,30h				;Pasa el digito en AL a su valor ASCII
+    mov [num_impr],al 		;Pasa el digito a una variable de memoria ya que AL se modifica en las siguientes macros
+    push cx
+    posiciona_cursor [ren_aux],[col_aux]
+    imprime_caracter_color [num_impr],bgNegro,cBlanco
+    pop cx
+    inc [col_aux] 			;Recorre a la siguiente columna para imprimir el siguiente digito
+
+;Calcula digito de decenas
+    mov ax,cx 				;Recuperamos el residuo de la division anterior y preparamos AX para hacer division
+    xor dx,dx 				;limpia registro DX, para extender AX a 32 bits
+    div [diez]				;Division de 16 bits => AX=cociente, DX=residuo
+                            ;El cociente contendrá el valor del dígito que puede ser entre 0 y 9. 
+                            ;Por lo tanto, AX=000Xh => AH=00h y AL=0Xh, donde X es un dígito entre 0 y 9
+                            ;Asumimos que el digito ya esta en AL
+                            ;El residuo se utilizara para los siguientes digitos
+    mov cx,dx 				;Guardamos el residuo anterior en un registro disponible para almacenarlo temporalmente
+                            ;debido a que modificaremos DX antes de usar ese residuo
+    ;Imprime el digito decenas
+    add al,30h				;Pasa el digito en AL a su valor ASCII
+    mov [num_impr],al 		;Pasa el digito a una variable de memoria ya que AL se modifica en las siguientes macros
+    push cx
+    posiciona_cursor [ren_aux],[col_aux]
+    imprime_caracter_color [num_impr],bgNegro,cBlanco		
+    pop cx
+    inc [col_aux]
+
+;Calcula digito de unidades
+    mov ax,cx 				;Recuperamos el residuo de la division anterior
+                            ;Para este caso, el residuo debe ser un número entre 0 y 9
+                            ;al hacer AX = CX, el residuo debe estar entre 0000h y 0009h
+                            ;=> AX = 000Xh -> AH=00h y AL=0Xh
+    ;Imprime el digito de unidades
+    add al,30h				;Pasa el digito en AL a su valor ASCII
+    mov [num_impr],al 		;Pasa el digito a una variable de memoria ya que AL se modifica en las siguientes macros
+    posiciona_cursor [ren_aux],[col_aux]
+    imprime_caracter_color [num_impr],bgNegro,cBlanco
+
+;Se recuperan los valores de los registros CX, AX, y DX almacenados en la pila
+    pop ax
+    pop dx
+    pop cx
+    ret 					;intruccion ret para regresar de llamada a procedimiento
+endp
+
 
 end inicio
