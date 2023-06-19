@@ -1,0 +1,2933 @@
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 1
+PROYECTO.ASM
+
+
+
+      1					 LOCALS	@@
+      2	    0000				 .model	small
+      3						 .386
+      4	    0000				 .stack	64
+      5					 ; TODO	: Conversión de bases,	operaciones, agregar botón C, y modo en Octal
+      6					 ;Macros
+      7					 ;clear	- Limpia pantalla
+      8					 clear macro
+      9						 mov ax,0003h	 ;ah = 00h, selecciona modo video
+     10										 ;al = 03h. Modo texto,	16 colores
+     11						 int 10h	 ;llama	interrupcion 10h con opcion 00h.
+     12									 ;Establece modo de video limpiando pantalla
+     13					 endm
+     14					 ;posiciona_cursor - Cambia la posición del cursor a la especificada con 'renglon' y	    +
+     15					 'columna'
+     16					 posiciona_cursor macro	renglon,columna
+     17						 mov dh,renglon	 ;dh = renglon
+     18						 mov dl,columna	 ;dl = columna
+     19						 mov bx,0
+     20						 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+     21						 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+     22					 endm
+     23					 ;inicializa_ds	- Inicializa el	valor del registro DS
+     24					 inicializa_ds	 macro
+     25						 mov ax,@data
+     26						 mov ds,ax
+     27					 endm
+     28					 ;muestra_cursor_mouse - Establece la visibilidad del cursor del mouser
+     29					 muestra_cursor_mouse	 macro
+     30						 mov ax,1		 ;opcion 0001h
+     31						 int 33h		 ;int 33h para manejo del mouse. Opcion	AX=0001h
+     32										 ;Habilita la visibilidad del cursor del mouse en el+
+     33					 programa
+     34					 endm
+     35					 ;oculta_cursor_teclado	- Oculta la visibilidad	del cursor del teclado
+     36					 oculta_cursor_teclado	 macro
+     37						 mov ah,01h		 ;Opcion 01h
+     38						 mov cx,2607h	 ;Parametro necesario para ocultar cursor
+     39						 int 10h		 ;int 10, opcion 01h. Cambia la	visibilidad del	cursor del  +
+     40					 teclado
+     41					 endm
+     42					 ;apaga_cursor_parpadeo	- Deshabilita el parpadeo del cursor cuando se imprimen	caracteres  +
+     43					 con fondo de color
+     44					 ;Habilita 16 colores de fondo
+     45					 apaga_cursor_parpadeo	 macro
+     46						 mov ax,1003h		 ;Opcion 1003h
+     47						 xor bl,bl			 ;BL = 0, parámetro para int 10h opción 1003h
+     48						 int 10h			 ;int 10, opcion 01h. Cambia la	visibilidad del	    +
+     49					 cursor	del teclado
+     50					 endm
+     51					 ;imprime_caracter_color - Imprime un caracter de cierto color en pantalla especificado	por +
+     52					 'caracter' y 'color'. Los colores disponibles están en la lista a continuacion;
+     53					 ; Colores:
+     54					 ; 00h:	Negro
+     55					 ; 01h:	Azul
+     56					 ; 02h:	Verde
+     57					 ; 03h:	Cyan
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 2
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+     58					 ; 04h:	Rojo
+     59					 ; 05h:	Magenta
+     60					 ; 06h:	Cafe
+     61					 ; 07h:	Gris Claro
+     62					 ; 08h:	Gris Oscuro
+     63					 ; 09h:	Azul Claro
+     64					 ; 0Ah:	Verde Claro
+     65					 ; 0Bh:	Cyan Claro
+     66					 ; 0Ch:	Rojo Claro
+     67					 ; 0Dh:	Magenta	Claro
+     68					 ; 0Eh:	Amarillo
+     69					 ; 0Fh:	Blanco
+     70					 ; utiliza int 10h opcion 09h
+     71					 imprime_caracter_color	macro caracter,bg_color,color
+     72						 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+     73						 mov al,caracter		 ;DL = caracter	a imprimir
+     74						 mov bh,0				 ;BH = numero de pagina
+     75						 mov bl,bg_color	 ;BL (4	bits mas significativos) = color de fondo del	    +
+     76					 caracter
+     77					     xor bl,color		 ;BL (4	bits menos significativos) = color del caracter
+     78
+     79						 mov cx,1				 ;CX = numero de veces que se imprime el    +
+     80					 caracter
+     81												 ;CX es	un argumento necesario para +
+     82					 opcion	09h de int 10h
+     83						 int 10h				 ;int 10h, AH=09h, imprime el caracter en AL+
+     84					 con el	color BL
+     85					 endm
+     86					 ;lee_mouse - Revisa el	estado del mouse
+     87					 ;Devuelve:
+     88					 ;;BX -	estado de los botones
+     89					 ;;;Si BX = 0000h, ningun boton	presionado
+     90					 ;;;Si BX = 0001h, boton izquierdo presionado
+     91					 ;;;Si BX = 0002h, boton derecho presionado
+     92					 ;;;Si BX = 0003h, boton izquierdo y derecho presionados
+     93					 ; (400,120) =>	80x25 =>Columna: 400 x 80 / 640	= 50; Renglon: (120 x 25 / 200)	= 15 =>	50,15
+     94					 ;;CX -	columna	en la que se encuentra el mouse	en resolucion 640x200 (columnas	x renglones)
+     95					 ;;DX -	renglon	en el que se encuentra el mouse	en resolucion 640x200 (columnas	x renglones)
+     96					 lee_mouse	 macro
+     97						 mov ax,0003h
+     98						 int 33h
+     99					 endm
+    100					 ;comprueba_mouse - Revisa si el driver	del mouse existe
+    101					 comprueba_mouse	 macro
+    102						 mov ax,0		 ;opcion 0
+    103						 int 33h		 ;llama	interrupcion 33h para manejo del mouse,	devuelve un +
+    104					 valor en AX
+    105										 ;Si AX	= 0000h, no existe el driver. Si AX = FFFFh,+
+    106					 existe	driver
+    107					 endm
+    108	    0000				 .data
+    109					 ;Constantes de	colores	de modo	de video
+    110		  =0000			 cNegro			 equ		 00h
+    111		  =0001			 cAzul			 equ		 01h
+    112		  =0002			 cVerde			 equ	 02h
+    113		  =0003			 cCyan			 equ	 03h
+    114		  =0004			 cRojo			 equ	 04h
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 3
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+    115		  =0005			 cMagenta		 equ		 05h
+    116		  =0006			 cCafe			 equ	 06h
+    117		  =0007			 cGrisClaro		 equ		 07h
+    118		  =0008			 cGrisOscuro		 equ		 08h
+    119		  =0009			 cAzulClaro		 equ		 09h
+    120		  =000A			 cVerdeClaro		 equ		 0Ah
+    121		  =000B			 cCyanClaro		 equ		 0Bh
+    122		  =000C			 cRojoClaro		 equ		 0Ch
+    123		  =000D			 cMagentaClaro	 equ		 0Dh
+    124		  =000E			 cAmarillo		 equ		 0Eh
+    125		  =000F			 cBlanco		 equ		 0Fh
+    126					 ;Valores de color para	fondo de carácter
+    127		  =0000			 bgNegro		 equ		 00h
+    128		  =0010			 bgAzul			 equ		 10h
+    129		  =0020			 bgVerde		 equ	 20h
+    130		  =0030			 bgCyan			 equ	 30h
+    131		  =0040			 bgRojo			 equ	 40h
+    132		  =0050			 bgMagenta		 equ		 50h
+    133		  =0060			 bgCafe			 equ	 60h
+    134		  =0070			 bgGrisClaro		 equ		 70h
+    135		  =0080			 bgGrisOscuro	 equ		 80h
+    136		  =0090			 bgAzulClaro		 equ		 90h
+    137		  =00A0			 bgVerdeClaro	 equ		 0A0h
+    138		  =00B0			 bgCyanClaro		 equ		 0B0h
+    139		  =00C0			 bgRojoClaro		 equ		 0C0h
+    140		  =00D0			 bgMagentaClaro	 equ		 0D0h
+    141		  =00E0			 bgAmarillo		 equ		 0E0h
+    142		  =00F0			 bgBlanco		 equ		 0F0h
+    143
+    144		  =0004			 digitos	 equ		 4
+    145
+    146		  =0000			 baseDec	 equ		 0
+    147		  =0001			 baseHex	 equ		 1
+    148		  =0002			 baseBin	 equ		 2
+    149
+    150	    0000  00			 baseSel	 db		 0
+    151
+    152	    0001  04*(00)		 num1		 db		 digitos dup(0)		 ;primer numero, en cada localidad  +
+    153					 guarda	1 digito, puede	ser hasta 4 digitos
+    154	    0005  04*(00)		 num2		 db		 digitos dup(0)		 ;segundo numero, en cada localidad +
+    155					 guarda	1 digito, puede	ser hasta 4 digitos
+    156	    0009  0000			 num1h		 dw		 0
+    157	    000B  0000			 num2h		 dw		 0
+    158	    000D  0000 0000		 resultado	 dw		 0,0			 ;resultado es un arreglo de 2 datos+
+    159					 tipo word
+    160														 ;el primer dato    +
+    161					 [resultado] puede guardar el contenido	del resultado para la suma, resta, cociente de	    +
+    162					 division o residuo de division
+    163														 ;el segundo dato   +
+    164					 [resultado+2],	en conjunto con	[resultado] pueden almacenar la	multiplicacion de dos	    +
+    165					 numeros de 16 bits
+    166	    0011  0000			 conta1		 dw		 0
+    167	    0013  0000			 conta2		 dw		 0
+    168	    0015  00			 operador	 db		 0
+    169	    0016  00			 num_boton	 db		 0
+    170	    0017  00			 num_impr	 db		 0
+    171
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 4
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+    172					 ;Auxiliares para calculo de digitos de	un numero decimal de hasta 5 digitos
+    173	    0018  2710			 diezmil	 dw		 10000d
+    174	    001A  03E8			 mil			 dw		 1000d
+    175	    001C  0064			 cien		 dw		 100d
+    176	    001E  000A			 diez		 dw		 10d
+    177	    0020  0010			 dhex		 dw		 16d
+    178	    0022  0002			 dbin	     dw		 2d
+    179					 ;Auxiliar para	calculo	de coordenadas del mouse
+    180	    0024  08			 ocho		 db		 8
+    181					 ;Cuando el driver del mouse no	esta disponible
+    182	    0025  4E 6F	20 73 65 20 65+	 no_mouse		 db	 'No se	encuentra driver de mouse. Presione [enter] para    +
+    183		  6E 63	75 65 6E 74 72+	 salir$'
+    184		  61 20	64 72 69 76 65+
+    185		  72 20	64 65 20 6D 6F+
+    186		  75 73	65 2E 20 50 72+
+    187		  65 73	69 6F 6E 65 20+
+    188		  5B 65	6E 74 65 72 5D+
+    189		  20 70	61 72 61 20 73+
+    190		  61 6C	69 72 24
+    191
+    192					 ;MARCO	PRINCIPAL DE LA	INTERFAZ GRAFICA
+    193					 ;Caracteres del marco superior
+    194					 ;columnas		 000,	 001		 002		 003		 004	    +
+    195					 005		 006		 007		 008		 009		 010	    +
+    196					 011		 012		 013		 014		 015		 016	    +
+    197					 017		 018		 019		 020		 021		 022	    +
+    198					 023		 024		 025		 026		 027		 028	    +
+    199					 029		 030		 031		 032		 033		 034	    +
+    200					 035		 036		 037		 038
+    201	    0062  C9 CD	CD CD CD CD CD+	 marco_sup	 db	 201,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    202		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    203		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    204		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 'C',	 'A',	 'L',	 'C',	 'U',	 'L',	    +
+    205		  CD CD	CD CD CD CD CD+	 'A',	 'D',	 'O',	 'R',	 'A',	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    206		  43 41	4C 43 55 4C 41+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    207		  44 4F	52 41 CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    208		  CD CD	CD CD CD CD CD+	 205,	 205,	 '[',
+    209		  CD CD	CD CD CD CD CD+
+    210		  CD CD	CD CD CD CD CD+
+    211		  CD CD	CD CD CD CD 5B+
+    212		  58 5D	BB
+    213					 ;Caracter del marco lateral
+    214	    00B2  BA			 marco_lat	 db	 186
+    215					 ;Caracteres del marco inferior
+    216	    00B3  C8 CD	CD CD CD CD CD+	 marco_inf	 db	 200,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    217		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    218		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    219		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    220		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    221		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    222		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    223		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,
+    224		  CD CD	CD CD CD CD CD+
+    225		  CD CD	CD CD CD CD CD+
+    226		  CD CD	CD CD CD CD CD+
+    227		  CD CD	BC
+    228
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 5
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+    229					 ;MARCO	DE LA CALCULADORA
+    230					 ;Caracteres del marco superior
+    231					 ;					 000,	 001		 002		 003	    +
+    232					 004		 005		 006		 007		 008		 009	    +
+    233					 010		 011		 012		 013		 014		 015	    +
+    234					 016		 017		 018		 019		 020		 021	    +
+    235					 022		 023		 024		 025		 026		 027	    +
+    236					 028		 029		 030		 031		 032		 033	    +
+    237					 034		 035		 036		 037
+    238	    0103  C9 CD	CD CD CD CD CD+	 marco_sup_cal	 db	 201,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    239		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    240		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    241		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    242		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 187
+    243		  CD CD	CD CD CD CD CD+
+    244		  CD CD	CD CD CD CD CD+
+    245		  BB
+    246					 ;Caracter del marco lateral
+    247	    0135  BA			 marco_lat_cal	 db	 186
+    248					 ;Caracter del marco de	cruce superior
+    249	    0136  CB			 marco_csup_cal	 db	 203
+    250					 ;Caracter del marco de	cruce inferior
+    251	    0137  CA			 marco_cinf_cal	 db	 202
+    252					 ;Caracter del marco de	cruce izquierdo
+    253	    0138  CC			 marco_cizq_cal	 db	 204
+    254					 ;Caracter del marco de	cruce derecho
+    255	    0139  B9			 marco_cder_cal	 db	 185
+    256					 ;Caracteres del marco inferior
+    257	    013A  C8 CD	CD CD CD CD CD+	 marco_inf_cal	 db	 200,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    258		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    259		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    260		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	    +
+    261		  CD CD	CD CD CD CD CD+	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 205,	 188
+    262		  CD CD	CD CD CD CD CD+
+    263		  CD CD	CD CD CD CD CD+
+    264		  BC
+    265					 ;Caracter del marco horizontal	interno
+    266	    016C  CD			 marco_hint_cal	 db	 205
+    267					 ;Caracter del marco vertical interno
+    268	    016D  BA			 marco_vint_cal	 db	 186
+    269
+    270					 ;MARCO	DE BOTON
+    271					 ;Caracteres del marco superior
+    272					 ;					 000,	 001		 002		 003	    +
+    273					 004
+    274	    016E  DA C4	C4 C4 BF	 marco_sup_bot	 db	 218,	 196,	 196,	 196,	 191
+    275					 ;Caracter del marco lateral
+    276	    0173  B3			 marco_lat_bot	 db	 179
+    277					 ;Caracteres del marco inferior
+    278	    0174  C0 C4	C4 C4 D9	 marco_inf_bot	 db	 192,	 196,	 196,	 196,	 217
+    279
+    280					 ;Variables que	sirven de parametros para el procedimiento IMPRIME_BOTON
+    281	    0179  00			 boton_caracter		     db		 0
+    282	    017A  00			 boton_renglon		     db		 0
+    283	    017B  00			 boton_columna		     db		 0
+    284	    017C  00			 boton_color			     db		 0
+    285	    017D  00			 boton_caracter_color		 db		 0
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 6
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+    286
+    287					 ;Variables tipo byte auxiliares cuando	se manejan renglones y columnas	dentro de la pantalla
+    288	    017E  00			 ren_aux		 db		 0
+    289	    017F  00			 col_aux		 db		 0
+    290
+    291	    0180				 .code
+    292	    0000			 inicio:
+    293						 inicializa_ds
+1   294	    0000  B8 0000s			 mov ax,@data
+1   295	    0003  8E D8				 mov ds,ax
+    296						 comprueba_mouse	 ;macro	para revisar driver de mouse
+1   297	    0005  B8 0000			 mov ax,0		 ;opcion 0
+1   298	    0008  CD 33				 int 33h		 ;llama	interrupcion 33h para manejo del mouse,	devuelve un +
+    299					 valor en AX
+    300	    000A  35 FFFF			 xor ax,0FFFFh		 ;compara el valor de AX con FFFFh, si el resultado es zero,+
+    301					 entonces existe el driver de mouse
+    302	    000D  74 0D	90 90			 jz imprime_ui		 ;Si existe el driver del mouse, entonces salta	a	    +
+    303					 'imprime_ui'
+    304						 ;Si no	existe el driver del mouse entonces se ejecutan	las siguientes instrucciones
+    305	    0011  BA 0025r			 lea dx,[no_mouse]
+    306	    0014  B8 0900			 mov ax,0900h	 ;opcion 9 para	interrupcion 21h
+    307	    0017  CD 21				 int 21h		 ;interrupcion 21h. Imprime cadena.
+    308	    0019  E9 04FF			 jmp teclado		 ;salta	a 'teclado'
+    309	    001C			 imprime_ui:
+    310						 clear					 ;limpia pantalla
+1   311	    001C  B8 0003			 mov ax,0003h	 ;ah = 00h, selecciona modo video
+1   312	    001F  CD 10				 int 10h	 ;llama	interrupcion 10h con opcion 00h.
+    313						 oculta_cursor_teclado	 ;oculta cursor	del mouse
+1   314	    0021  B4 01				 mov ah,01h		 ;Opcion 01h
+1   315	    0023  B9 2607			 mov cx,2607h	 ;Parametro necesario para ocultar cursor
+1   316	    0026  CD 10				 int 10h		 ;int 10, opcion 01h. Cambia la	visibilidad del	cursor del  +
+    317					 teclado
+    318						 apaga_cursor_parpadeo	 ;Deshabilita parpadeo del cursor
+1   319	    0028  B8 1003			 mov ax,1003h		 ;Opcion 1003h
+1   320	    002B  32 DB				 xor bl,bl			 ;BL = 0, parámetro para int 10h opción 1003h
+1   321	    002D  CD 10				 int 10h			 ;int 10, opcion 01h. Cambia la	visibilidad del	    +
+    322					 cursor	del teclado
+    323	    002F  E8 0524			 call MARCO_UI			 ;procedimiento	que dibuja marco de la interfaz
+    324	    0032  E8 05E3			 call CALCULADORA_UI	 ;procedimiento	que dibuja la calculadora dentro de la	    +
+    325					 interfaz
+    326						 muestra_cursor_mouse	 ;hace visible el cursor del mouse
+1   327	    0035  B8 0001			 mov ax,1		 ;opcion 0001h
+1   328	    0038  CD 33				 int 33h		 ;int 33h para manejo del mouse. Opcion	AX=0001h
+    329					 ;Revisar que el boton izquierdo del mouse no este presionado
+    330					 ;Si el	boton no esta suelto no	continua
+    331	    003A			 mouse_no_clic:
+    332						 lee_mouse
+1   333	    003A  B8 0003			 mov ax,0003h
+1   334	    003D  CD 33				 int 33h
+    335	    003F  F7 C3	0001			 test bx,0001h
+    336	    0043  75 F5				 jnz mouse_no_clic
+    337					 ;Lee el mouse y avanza	hasta que se haga clic en el boton izquierdo
+    338	    0045			 mouse:
+    339						 lee_mouse
+1   340	    0045  B8 0003			 mov ax,0003h
+1   341	    0048  CD 33				 int 33h
+    342	    004A  F7 C3	0001			 test bx,0001h		 ;Para revisar si el boton izquierdo del mouse fue presionado
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 7
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+    343	    004E  74 F5				 jz mouse			 ;Si el	boton izquierdo	no fue presionado, vuelve a +
+    344					 leer el estado	del mouse
+    345
+    346						 ;Leer la posicion del mouse y hacer la	conversion a resolucion
+    347						 ;80x25	(columnas x renglones) en modo texto
+    348	    0050  8B C2				 mov ax,dx			 ;Copia	DX en AX. DX es	un valor entre 0 y 199	    +
+    349					 (renglon)
+    350	    0052  F6 36	0024r			 div [ocho]			 ;Division de 8	bits
+    351											 ;divide el valor del renglon en resolucion +
+    352					 640x200 en donde se encuentra el mouse
+    353											 ;para obtener el valor	correspondiente	en  +
+    354					 resolucion 80x25
+    355	    0056  32 E4				 xor ah,ah			 ;Descartar el residuo de la division anterior
+    356	    0058  8B D0				 mov dx,ax			 ;Copia	AX en DX. AX es	un valor entre 0 y 24	    +
+    357					 (renglon)
+    358
+    359
+    360	    005A  8B C1				 mov ax,cx			 ;Copia	CX en AX. CX es	un valor entre 0 y 639	    +
+    361					 (columna)
+    362	    005C  F6 36	0024r			 div [ocho]			 ;Division de 8	bits
+    363											 ;divide el valor de la	columna	en	    +
+    364					 resolucion 640x200 en donde se	encuentra el mouse
+    365											 ;para obtener el valor	correspondiente	en  +
+    366					 resolucion 80x25
+    367	    0060  32 E4				 xor ah,ah			 ;Descartar el residuo de la division anterior
+    368	    0062  8B C8				 mov cx,ax			 ;Copia	AX en CX. AX es	un valor entre 0 y 79	    +
+    369					 (columna)
+    370
+    371					 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    372					 ;Aqui va la lógica de	la posicion del	mouse;
+    373					 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    374						 ;Si el	mouse fue presionado en	el renglon 0
+    375						 ;se va	a revisar si fue dentro	del boton [X]
+    376	    0064  83 FA	00			 cmp dx,0
+    377	    0067  0F 84	0151			 je botonX
+    378						 ;Si el	mouse fue presionado antes del renglon 9
+    379						 ;no hay nada que revisar
+    380	    006B  83 FA	07			 cmp dx,7
+    381	    006E  72 CA				 jb mouse_no_clic
+    382						 ;Si el	mouse fue presionado despues del renglon 21
+    383						 ;no hay nada que revisar
+    384	    0070  83 FA	15			 cmp dx,21
+    385	    0073  7F C5				 jg mouse_no_clic
+    386						 ;Si el	mouse fue presionado antes de la columna 17
+    387						 ;no hay nada que revisar
+    388	    0075  83 F9	11			 cmp cx,17
+    389	    0078  72 C0				 jb mouse_no_clic
+    390						 ;Si el	mouse fue presionado despues de	la columna 62
+    391						 ;no hay nada que revisar
+    392	    007A  83 F9	3E			 cmp cx,62
+    393	    007D  7F BB				 jg mouse_no_clic
+    394
+    395						 ;Si el	mouse fue presionado antes de la columna 21 y despues de la 17
+    396						 ;es posible se	haya presionado	en un boton de base numerica
+    397	    007F  83 F9	15			 cmp cx,21
+    398	    0082  76 59	90 90			 jbe botones_base_num
+    399
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 8
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+    400						 ;Si el	mouse fue presionado antes de la columna 24 y despues de la 21
+    401						 ;se presiono en un espacio vacio
+    402	    0086  83 F9	18			 cmp cx,24
+    403	    0089  72 4F	90 90			 jb jmp_mouse_no_clic
+    404
+    405						 ;Si el	mouse fue presionado antes o dentro de la columna 28 y despues de la 24
+    406						 ;revisar si fue dentro	de un boton
+    407						 ;Botones entre	columnas 24 y 28: '7', '4', '1', 'C'
+    408	    008D  83 F9	1C			 cmp cx,28
+    409	    0090  76 75	90 90			 jbe botones_7_4_1_0
+    410
+    411						 ;;;
+    412						 ;;; COMPLETAR COMPARACIONES
+    413						 ;;;
+    414						 ; Segunda columna
+    415	    0094  83 F9	1E			 cmp cx,30
+    416	    0097  72 41	90 90			 jb jmp_mouse_no_clic
+    417
+    418	    009B  83 F9	22			 cmp cx,34
+    419	    009E  0F 86	0099			 jbe botones_8_5_2_A
+    420
+    421						 ; Tercer columna
+    422	    00A2  83 F9	24			 cmp cx,36
+    423	    00A5  72 33	90 90			 jb jmp_mouse_no_clic
+    424
+    425	    00A9  83 F9	28			 cmp cx,40
+    426	    00AC  0F 86	00A7			 jbe botones_9_6_3_B
+    427
+    428						 ; Cuarta columna
+    429	    00B0  83 F9	2A			 cmp cx,42
+    430	    00B3  72 25	90 90			 jb jmp_mouse_no_clic
+    431
+    432	    00B7  83 F9	2E			 cmp cx,46
+    433	    00BA  0F 86	00B5			 jbe botones_F_E_D_C
+    434
+    435						 ; Quinta columna
+    436	    00BE  83 F9	33			 cmp cx,51
+    437	    00C1  72 17	90 90			 jb jmp_mouse_no_clic
+    438
+    439	    00C5  83 F9	37			 cmp cx,55
+    440	    00C8  0F 86	00C3			 jbe botones_SUM_MUL_MOD
+    441
+    442						 ; Sexta columna
+    443	    00CC  83 F9	39			 cmp cx,57
+    444	    00CF  72 09	90 90			 jb jmp_mouse_no_clic
+    445
+    446	    00D3  83 F9	3E			 cmp cx,62
+    447	    00D6  0F 86	00CA			 jbe botones_MIN_DIV_EQU
+    448	    00DA			 jmp_mouse_no_clic:
+    449	    00DA  E9 FF5D			 jmp mouse_no_clic
+    450
+    451	    00DD			 botones_base_num:
+    452						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    453						 ;corresponde con boton	'Dec'
+    454	    00DD  83 FA	09			 cmp dx,9
+    455	    00E0  0F 86	01E3			 jbe botonDec
+    456	    00E4  83 FA	0A			 cmp dx,10
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 9
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+    457	    00E7  0F 84	FF4F			 je mouse_no_clic
+    458
+    459	    00EB  83 FA	0D			 cmp dx,13
+    460	    00EE  0F 86	01E0			 jbe botonHex
+    461	    00F2  83 FA	0E			 cmp dx,14
+    462	    00F5  0F 84	FF41			 je mouse_no_clic
+    463
+    464	    00F9  83 FA	11			 cmp dx,17
+    465	    00FC  0F 86	01DD			 jbe botonBin
+    466
+    467	    0100  83 FA	12			 cmp dx,18
+    468	    0103  0F 84	FF33			 je mouse_no_clic
+    469
+    470	    0107			 botones_7_4_1_0:
+    471						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    472						 ;corresponde con boton	'7'
+    473	    0107  83 FA	09			 cmp dx,9
+    474	    010A  0F 86	0120			 jbe boton7
+    475
+    476						 ;renglon 12 es	espacio	vacio
+    477	    010E  83 FA	0A			 cmp dx,10
+    478	    0111  0F 84	FF25			 je mouse_no_clic
+    479
+    480						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    481						 ;corresponde con boton	'4'
+    482	    0115  83 FA	0D			 cmp dx,13
+    483	    0118  0F 86	00D3			 jbe boton4
+    484
+    485						 ;renglon 16 es	espacio	vacio
+    486	    011C  83 FA	0E			 cmp dx,14
+    487	    011F  0F 84	FF17			 je mouse_no_clic
+    488
+    489						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    490						 ;corresponde con boton	'1'
+    491	    0123  83 FA	11			 cmp dx,17
+    492	    0126  0F 86	0098			 jbe boton1
+    493
+    494						 ;renglon 20 es	espacio	vacio
+    495	    012A  83 FA	12			 cmp dx,18
+    496	    012D  0F 84	FF09			 je mouse_no_clic
+    497
+    498						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    499						 ;corresponde con boton	'0'
+    500	    0131  83 FA	15			 cmp dx,21
+    501	    0134  0F 86	0087			 jbe boton0
+    502
+    503						 ;Si no	es ninguno de los anteriores
+    504	    0138  E9 FEFF			 jmp mouse_no_clic
+    505
+    506	    013B			 botones_8_5_2_A:
+    507						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    508						 ;corresponde con boton	'8'
+    509	    013B  83 FA	09			 cmp dx,9
+    510	    013E  0F 86	0101			 jbe boton8
+    511						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    512						 ;corresponde con boton	'5'
+    513	    0142  83 FA	0D			 cmp dx,13
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 10
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+    514	    0145  0F 86	00BB			 jbe boton5
+    515						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    516						 ;corresponde con boton	'2'
+    517	    0149  83 FA	11			 cmp dx,17
+    518	    014C  76 77	90 90			 jbe boton2
+    519						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    520						 ;corresponde con boton	'A'
+    521	    0150  83 FA	15			 cmp dx,21
+    522	    0153  0F 86	0116			 jbe botonA
+    523
+    524	    0157			 botones_9_6_3_B:
+    525						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    526						 ;corresponde con boton	'9'
+    527	    0157  83 FA	09			 cmp dx,9
+    528	    015A  0F 86	00FA			 jbe boton9
+    529						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    530						 ;corresponde con boton	'6'
+    531	    015E  83 FA	0D			 cmp dx,13
+    532	    0161  0F 86	00B4			 jbe boton6
+    533						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    534						 ;corresponde con boton	'3'
+    535	    0165  83 FA	11			 cmp dx,17
+    536	    0168  76 70	90 90			 jbe boton3
+    537						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    538						 ;corresponde con boton	'B'
+    539	    016C  83 FA	15			 cmp dx,21
+    540	    016F  0F 86	0106			 jbe botonB
+    541
+    542	    0173			 botones_F_E_D_C:
+    543						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    544						 ;corresponde con boton	'F'
+    545	    0173  83 FA	09			 cmp dx,9
+    546	    0176  0F 86	012F			 jbe botonF
+    547						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    548						 ;corresponde con boton	'E'
+    549	    017A  83 FA	0D			 cmp dx,13
+    550	    017D  0F 86	011C			 jbe botonE
+    551						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    552						 ;corresponde con boton	'D'
+    553	    0181  83 FA	11			 cmp dx,17
+    554	    0184  0F 86	0109			 jbe botonD
+    555						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    556						 ;corresponde con boton	'C'
+    557	    0188  83 FA	15			 cmp dx,21
+    558	    018B  0F 86	00F6			 jbe botonC
+    559
+    560	    018F			 botones_SUM_MUL_MOD:
+    561						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    562						 ;corresponde con boton	'F'
+    563	    018F  83 FA	0B			 cmp dx,11
+    564	    0192  0F 86	011F			 jbe botonSuma
+    565						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    566						 ;corresponde con boton	'E'
+    567	    0196  83 FA	0F			 cmp dx,15
+    568	    0199  0F 86	011E			 jbe botonMult
+    569						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    570						 ;corresponde con boton	'D'
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 11
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+    571	    019D  83 FA	13			 cmp dx,19
+    572	    01A0  0F 86	011D			 jbe botonDivR
+    573
+    574	    01A4			 botones_MIN_DIV_EQU:
+    575						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    576						 ;corresponde con boton	'F'
+    577	    01A4  83 FA	0B			 cmp dx,11
+    578	    01A7  0F 86	010D			 jbe botonResta
+    579						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    580						 ;corresponde con boton	'E'
+    581	    01AB  83 FA	0F			 cmp dx,15
+    582	    01AE  0F 86	010C			 jbe botonDivC
+    583						 ;Revisar si el	renglon	en donde fue presionado	el mouse
+    584						 ;corresponde con boton	'D'
+    585	    01B2  83 FA	13			 cmp dx,19
+    586	    01B5  0F 86	010B			 jbe botonIgual
+    587
+    588						 ;Si no	es ninguno de los anteriores
+    589	    01B9  E9 FE7E			 jmp mouse_no_clic
+    590					 ;Dependiendo la posicion del mouse
+    591					 ;se salta a la	seccion	correspondiente
+    592	    01BC			 botonX:
+    593	    01BC  E9 0129			 jmp botonX_1
+    594
+    595	    01BF			 boton0:
+    596	    01BF  E9 013D		     jmp boton0_1
+    597	    01C2			 boton1:
+    598	    01C2  E9 0142		     jmp boton1_1
+    599
+    600	    01C5			 boton2:
+    601	    01C5  80 3E	0000r 00		 cmp [baseSel],baseDec
+    602	    01CA  74 0B	90 90		     je	boton2_is_enabled
+    603	    01CE  80 3E	0000r 01	     cmp [baseSel],baseHex
+    604	    01D3  0F 85	FE63		     jne mouse_no_clic
+    605	    01D7			 boton2_is_enabled:
+    606	    01D7  E9 0135		     jmp boton2_1
+    607
+    608	    01DA			 boton3:
+    609	    01DA  80 3E	0000r 00	     cmp [baseSel],baseDec
+    610	    01DF  74 0B	90 90		     je	boton3_is_enabled
+    611	    01E3  80 3E	0000r 01	     cmp [baseSel],baseHex
+    612	    01E8  0F 85	FE4E		     jne mouse_no_clic
+    613	    01EC			 boton3_is_enabled:
+    614	    01EC  E9 0128		     jmp boton3_1
+    615
+    616	    01EF			 boton4:
+    617	    01EF  80 3E	0000r 00	     cmp [baseSel],baseDec
+    618	    01F4  74 0B	90 90		     je	boton4_is_enabled
+    619	    01F8  80 3E	0000r 01	     cmp [baseSel],baseHex
+    620	    01FD  0F 85	FE39		     jne mouse_no_clic
+    621	    0201			 boton4_is_enabled:
+    622	    0201  E9 011B		     jmp boton4_1
+    623
+    624	    0204			 boton5:
+    625	    0204  80 3E	0000r 00	     cmp [baseSel],baseDec
+    626	    0209  74 0B	90 90		     je	boton5_is_enabled
+    627	    020D  80 3E	0000r 01	     cmp [baseSel],baseHex
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 12
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+    628	    0212  0F 85	FE24		     jne mouse_no_clic
+    629	    0216			 boton5_is_enabled:
+    630	    0216  E9 010E		     jmp boton5_1
+    631
+    632	    0219			 boton6:
+    633	    0219  80 3E	0000r 00	     cmp [baseSel],baseDec
+    634	    021E  74 0B	90 90		     je	boton6_is_enabled
+    635	    0222  80 3E	0000r 01	     cmp [baseSel],baseHex
+    636	    0227  0F 85	FE0F		     jne mouse_no_clic
+    637	    022B			 boton6_is_enabled:
+    638	    022B  E9 0101		     jmp boton6_1
+    639
+    640	    022E			 boton7:
+    641	    022E  80 3E	0000r 00	     cmp [baseSel],baseDec
+    642	    0233  74 0B	90 90		     je	boton7_is_enabled
+    643	    0237  80 3E	0000r 01	     cmp [baseSel],baseHex
+    644	    023C  0F 85	FDFA		     jne mouse_no_clic
+    645	    0240			 boton7_is_enabled:
+    646	    0240  E9 00F4		     jmp boton7_1
+    647
+    648	    0243			 boton8:
+    649	    0243  80 3E	0000r 00	     cmp [baseSel],baseDec
+    650	    0248  74 0B	90 90		     je	boton8_is_enabled
+    651	    024C  80 3E	0000r 01	     cmp [baseSel],baseHex
+    652	    0251  0F 85	FDE5		     jne mouse_no_clic
+    653	    0255			 boton8_is_enabled:
+    654	    0255  E9 00E7		     jmp boton8_1
+    655
+    656	    0258			 boton9:
+    657	    0258  80 3E	0000r 00		 cmp [baseSel],baseDec
+    658	    025D  74 0B	90 90			 je boton9_is_enabled
+    659	    0261  80 3E	0000r 01		 cmp [baseSel],baseHex
+    660	    0266  0F 85	FDD0			 jne mouse_no_clic
+    661	    026A			 boton9_is_enabled:
+    662	    026A  E9 00DA		     jmp boton9_1
+    663
+    664	    026D			 botonA:
+    665	    026D  80 3E	0000r 01		 cmp [baseSel],baseHex
+    666	    0272  0F 85	FDC4			 jne	 mouse_no_clic
+    667	    0276  E9 00D6		     jmp botonA_1
+    668	    0279			 botonB:
+    669	    0279  80 3E	0000r 01		 cmp [baseSel],baseHex
+    670	    027E  0F 85	FDB8			 jne	 mouse_no_clic
+    671	    0282  E9 00D2		     jmp botonB_1
+    672	    0285			 botonC:
+    673	    0285  80 3E	0000r 01		 cmp [baseSel],baseHex
+    674	    028A  0F 85	FDAC			 jne	 mouse_no_clic
+    675	    028E  E9 00CE		     jmp botonC_1
+    676	    0291			 botonD:
+    677	    0291  80 3E	0000r 01		 cmp [baseSel],baseHex
+    678	    0296  0F 85	FDA0			 jne	 mouse_no_clic
+    679	    029A  E9 00CA		     jmp botonD_1
+    680	    029D			 botonE:
+    681	    029D  80 3E	0000r 01		 cmp [baseSel],baseHex
+    682	    02A2  0F 85	FD94			 jne	 mouse_no_clic
+    683	    02A6  E9 00C6		     jmp botonE_1
+    684	    02A9			 botonF:
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 13
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+    685	    02A9  80 3E	0000r 01		 cmp [baseSel],baseHex
+    686	    02AE  0F 85	FD88			 jne	 mouse_no_clic
+    687	    02B2  E9 00C2		     jmp botonF_1
+    688	    02B5			 botonSuma:
+    689	    02B5  E9 00C7			 jmp botonSuma_1
+    690	    02B8			 botonResta:
+    691	    02B8  E9 00CC			 jmp botonResta_1
+    692	    02BB			 botonMult:
+    693	    02BB  E9 00D1			 jmp botonMult_1
+    694	    02BE			 botonDivC:
+    695	    02BE  E9 00D6			 jmp	 botonDivC_1
+    696	    02C1			 botonDivR:
+    697	    02C1  E9 00DB			 jmp	 botonDivR_1
+    698	    02C4			 botonIgual:
+    699	    02C4  E9 00E0			 jmp	 botonIgual_1
+    700						 ; ! completar
+    701	    02C7			 botonDec:
+    702	    02C7  C6 06	0000r 00		 mov			 [baseSel],baseDec
+    703	    02CC  E8 0C99			 call LIMPIA_PANTALLA_CALC
+    704	    02CF  E9 FD68			 jmp mouse_no_clic
+    705	    02D2			 botonHex:
+    706	    02D2  C6 06	0000r 01		 mov			 [baseSel],baseHex
+    707	    02D7  E8 0C8E			 call LIMPIA_PANTALLA_CALC
+    708	    02DA  E9 FD5D			 jmp mouse_no_clic
+    709	    02DD			 botonBin:
+    710	    02DD  C6 06	0000r 02		 mov			 [baseSel],baseBin
+    711	    02E2  E8 0C83			 call LIMPIA_PANTALLA_CALC
+    712	    02E5  E9 FD52			 jmp mouse_no_clic
+    713					 ;Logica para revisar si el mouse fue presionado en [X]
+    714					 ;[X] se encuentra en renglon 0	y entre	columnas 76 y 79
+    715	    02E8			 botonX_1:
+    716	    02E8  83 F9	4C			 cmp cx,76
+    717	    02EB  7D 05	90 90			 jge botonX_2
+    718	    02EF  E9 FD48			 jmp mouse_no_clic
+    719	    02F2			 botonX_2:
+    720	    02F2  83 F9	4E			 cmp cx,78
+    721	    02F5  76 05	90 90			 jbe botonX_3
+    722	    02F9  E9 FD3E			 jmp mouse_no_clic
+    723	    02FC			 botonX_3:
+    724						 ;Se cumplieron	todas las condiciones
+    725	    02FC  E9 0224			 jmp salir
+    726
+    727					 ;Logica para revisar si el mouse fue presionado en C
+    728					 ;boton	C se encuentra entre renglones 18 y 20,
+    729					 ;y entre columnas 24 y	28
+    730	    02FF			 boton0_1:
+    731						 ;Agregar la logica para verificar el boton
+    732						 ;y limpiar la pantalla	de la calculadora
+    733	    02FF  C6 06	0016r 00			 mov	 num_boton,0
+    734	    0304  E9 00D1				 jmp jmp_lee_oper1
+    735					 ;Logica para revisar si el mouse fue presionado en '1'
+    736					 ;boton	'1' se encuentra entre renglones 15 y 17,
+    737					 ;y entre columnas 24 y	28
+    738	    0307			 boton1_1:
+    739	    0307  C6 06	0016r 01		 mov num_boton,1
+    740	    030C  E9 00C9			 jmp jmp_lee_oper1
+    741	    030F			 boton2_1:
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 14
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+    742	    030F  C6 06	0016r 02		 mov num_boton,2
+    743	    0314  E9 00C1			 jmp jmp_lee_oper1
+    744	    0317			 boton3_1:
+    745	    0317  C6 06	0016r 03		 mov num_boton,3
+    746	    031C  E9 00B9			 jmp jmp_lee_oper1
+    747	    031F			 boton4_1:
+    748	    031F  C6 06	0016r 04		 mov num_boton,4
+    749	    0324  E9 00B1			 jmp jmp_lee_oper1
+    750	    0327			 boton5_1:
+    751	    0327  C6 06	0016r 05		 mov num_boton,5
+    752	    032C  E9 00A9			 jmp jmp_lee_oper1
+    753	    032F			 boton6_1:
+    754	    032F  C6 06	0016r 06		 mov num_boton,6
+    755	    0334  E9 00A1			 jmp jmp_lee_oper1
+    756	    0337			 boton7_1:
+    757	    0337  C6 06	0016r 07		 mov num_boton,7
+    758	    033C  E9 0099			 jmp jmp_lee_oper1
+    759	    033F			 boton8_1:
+    760	    033F  C6 06	0016r 08		 mov num_boton,8
+    761	    0344  E9 0091			 jmp jmp_lee_oper1
+    762	    0347			 boton9_1:
+    763	    0347  C6 06	0016r 09		 mov num_boton,9
+    764	    034C  E9 0089			 jmp jmp_lee_oper1
+    765	    034F			 botonA_1:
+    766	    034F  C6 06	0016r 0A		 mov num_boton,10
+    767	    0354  E9 0081			 jmp jmp_lee_oper1
+    768	    0357			 botonB_1:
+    769	    0357  C6 06	0016r 0B		 mov num_boton,11
+    770	    035C  EB 7A	90			 jmp jmp_lee_oper1
+    771	    035F			 botonC_1:
+    772	    035F  C6 06	0016r 0C		 mov num_boton,12
+    773	    0364  EB 72	90			 jmp jmp_lee_oper1
+    774	    0367			 botonD_1:
+    775	    0367  C6 06	0016r 0D		 mov num_boton,13
+    776	    036C  EB 6A	90			 jmp jmp_lee_oper1
+    777	    036F			 botonE_1:
+    778	    036F  C6 06	0016r 0E		 mov num_boton,14
+    779	    0374  EB 62	90			 jmp jmp_lee_oper1
+    780	    0377			 botonF_1:
+    781	    0377  C6 06	0016r 0F		 mov num_boton,15
+    782	    037C  EB 5A	90			 jmp jmp_lee_oper1
+    783	    037F			 botonSuma_1:
+    784	    037F  C6 06	0015r 2B			 mov operador,"+"
+    785	    0384  E9 FCB3				 jmp mouse_no_clic
+    786	    0387			 botonResta_1:
+    787	    0387  C6 06	0015r 2D			 mov operador,"-"
+    788	    038C  E9 FCAB				 jmp mouse_no_clic
+    789	    038F			 botonMult_1:
+    790	    038F  C6 06	0015r 2A			 mov operador,"*"
+    791	    0394  E9 FCA3				 jmp mouse_no_clic
+    792	    0397			 botonDivC_1:
+    793	    0397  C6 06	0015r 2F			 mov operador,"/"
+    794	    039C  E9 FC9B				 jmp mouse_no_clic
+    795	    039F			 botonDivR_1:
+    796	    039F  C6 06	0015r 25			 mov operador,"%"
+    797	    03A4  E9 FC93				 jmp mouse_no_clic
+    798	    03A7			 botonIgual_1:
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 15
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+    799	    03A7  BB 0001r				 mov bx,offset num1			 ; Dirección en memoria del número+
+    800					 1
+    801	    03AA  E8 0C93				 call DIG2DEC
+    802	    03AD  A3 0009r				 mov	 [num1h],ax
+    803
+    804	    03B0  BB 0005r				 mov	 bx,offset num2			 ; Dirección en memoria del número+
+    805					 2
+    806	    03B3  E8 0C8A				 call DIG2DEC
+    807	    03B6  A3 000Br				 mov [num2h],ax
+    808
+    809	    03B9  C7 06	000Dr 0000			 mov		 [resultado],0000h
+    810	    03BF  C7 06	0011r 0000			 mov		 [resultado + 4],0000h
+    811
+    812	    03C5  80 3E	0015r 2B			 cmp [operador],"+"
+    813	    03CA  E9 00E1				 jmp	 operacion_sumar
+    814	    03CD  80 3E	0015r 2D			 cmp	 [operador],"-"
+    815	    03D2  E9 00EB				 jmp operacion_restar
+    816
+    817	    03D5  E9 FC62				 jmp mouse_no_clic
+    818	    03D8			 jmp_lee_oper1:
+    819	    03D8  EB 01	90			 jmp lee_oper1
+    820
+    821	    03DB			 lee_oper1:
+    822	    03DB  80 3E	0015r 00		 cmp [operador],0	 ;compara el valor del operador	que puede ser 0, '+', '-',  +
+    823					 '*', '/', '%'
+    824	    03E0  75 67	90 90			 jne lee_oper2		 ;Si el	comparador es diferente	de 0, entonces lee el	    +
+    825					 segundo numero
+    826	    03E4  83 3E	0011r 04		 cmp [conta1],4		 ;compara si el	contador para num1 llego al maximo
+    827	    03E9  0F 83	00BE			 jae no_lee_num		 ;si conta1 es mayor o igual a 4, entonces se ha alcanzado  +
+    828					 el numero de digitos
+    829											 ;y no hace nada
+    830	    03ED  A0 0016r			 mov al,num_boton	 ;valor	del boton presionado en	AL
+    831	    03F0  8B 3E	0011r			 mov di,[conta1]	 ;copia	el valor de conta1 en registro indice DI
+    832	    03F4  88 85	0001r			 mov [num1+di],al	 ;num1 es un arreglo de	tipo byte
+    833											 ;se utiliza di	para acceder el	elemento    +
+    834					 di-esimo del arreglo num1
+    835											 ;se guarda el valor del boton presionado en+
+    836					 el arreglo
+    837	    03F8  FF 06	0011r			 inc [conta1]		 ;incrementa conta1 por	numero correctamente leido
+    838
+    839						 ;Se imprime el	numero del arreglo num1	de acuerdo a conta1
+    840	    03FC  33 FF				 xor di,di			 ;limpia DI para utilizarlo
+    841	    03FE  8B 0E	0011r			 mov cx,[conta1]	 ;prepara CX para loop de acuerdo al numero de digitos	    +
+    842					 introducidos
+    843	    0402  C6 06	017Er 03		 mov [ren_aux],3	 ;variable ren_aux para	hacer operaciones en pantalla
+    844											 ;ren_aux se mantiene fijo a lo	largo del   +
+    845					 siguiente loop
+    846	    0407			 imprime_num1:
+    847	    0407  51				 push cx				 ;guarda el valor de CX	en la pila
+    848	    0408  C6 06	017Fr 3A		 mov [col_aux],58d		 ;variable col_aux para	hacer operaciones en	    +
+    849					 pantalla
+    850												 ;para recorrer	la pantalla al	    +
+    851					 imprimir el numero
+    852	    040D  28 0E	017Fr			 sub [col_aux],cl		 ;Para calcular	la columna en donde comienza a	    +
+    853					 imprimir en pantalla de acuerdo a CX
+    854						 posiciona_cursor [ren_aux],[col_aux]	 ;Posiciona el cursor en pantalla usando    +
+    855					 ren_aux y col_aux
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 16
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+1   856	    0411  8A 36	017Er			 mov dh,[ren_aux]	 ;dh = [ren_aux]
+1   857	    0415  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1   858	    0419  BB 0000			 mov bx,0
+1   859	    041C  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1   860	    041F  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+    861	    0421  8A 8D	0001r			 mov cl,[num1+di]		 ;copia	el digito en CL
+    862
+    863	    0425  80 C9	30			 or cl,30h				 ;Pasa valor ASCII
+    864	    0428  80 F9	3A			 cmp	 cl,3Ah
+    865	    042B  72 05	90 90			 jb  imprime_num1_dec
+    866	    042F  80 C1	07			 add cl,07h
+    867	    0432			 imprime_num1_dec:
+    868						 imprime_caracter_color	cl,bgNegro,cBlanco	 ;Imprime caracter en CL, color	    +
+    869					 blanco
+1   870	    0432  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1   871	    0434  8A C1				 mov al,cl		 ;DL = cl a imprimir
+1   872	    0436  B7 00				 mov bh,0				 ;BH = numero de pagina
+1   873	    0438  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cBlanco de fondo del cl
+1   874	    043A  80 F3	0F		     xor bl,cBlanco		 ;BL (4	bits menos significativos) = cBlanco del cl
+1   875	    043D  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el cl
+1   876	    0440  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el cl en AL con  +
+    877					 el cBlanco BL
+    878	    0442  47				 inc di					 ;incrementa DI	para recorrer el arreglo num1
+    879	    0443  59				 pop cx					 ;recupera el valor de CX al inicio del	loop
+    880	    0444  E2 C1				 loop imprime_num1
+    881
+    882	    0446  E9 FBF1			 jmp mouse_no_clic
+    883
+    884					 ; TODO	: Operacion 2
+    885	    0449			 lee_oper2:
+    886	    0449  83 3E	0013r 04		 cmp [conta2],4		 ;compara si el	contador para num2 llego al maximo
+    887	    044E  73 5B	90 90			 jae no_lee_num		 ;si conta2 es mayor o igual a 4, entonces se ha alcanzado  +
+    888					 el numero de digitos
+    889											 ;y no hace nada
+    890	    0452  A0 0016r			 mov	 al,num_boton
+    891	    0455  8B 3E	0013r			 mov		 di,[conta2]
+    892	    0459  88 85	0005r			 mov		 [num2+di],al
+    893	    045D  FF 06	0013r			 inc		 [conta2]
+    894
+    895	    0461  33 FF				 xor		 di,di
+    896	    0463  8B 0E	0013r			 mov		 cx,[conta2]
+    897	    0467  C6 06	017Er 04		 mov		 [ren_aux],4
+    898
+    899	    046C			 imprime_num2:
+    900	    046C  51				 push	 cx
+    901	    046D  C6 06	017Fr 3A		 mov		 [col_aux],58d
+    902	    0472  28 0E	017Fr			 sub		 [col_aux],cl
+    903						 posiciona_cursor [ren_aux],[col_aux]
+1   904	    0476  8A 36	017Er			 mov dh,[ren_aux]	 ;dh = [ren_aux]
+1   905	    047A  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1   906	    047E  BB 0000			 mov bx,0
+1   907	    0481  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1   908	    0484  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+    909	    0486  8A 8D	0005r			 mov		 cl,[num2+di]
+    910	    048A  80 C9	30			 or		 cl,30h
+    911	    048D  80 F9	3A			 cmp		 cl,3Ah
+    912	    0490  72 05	90 90			 jb		 imprime_num2_dec
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 17
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+    913	    0494  80 C1	07			 add	 cl,07h
+    914	    0497			 imprime_num2_dec:
+    915						 imprime_caracter_color	cl,bgNegro,cBlanco
+1   916	    0497  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1   917	    0499  8A C1				 mov al,cl		 ;DL = cl a imprimir
+1   918	    049B  B7 00				 mov bh,0				 ;BH = numero de pagina
+1   919	    049D  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cBlanco de fondo del cl
+1   920	    049F  80 F3	0F		     xor bl,cBlanco		 ;BL (4	bits menos significativos) = cBlanco del cl
+1   921	    04A2  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el cl
+1   922	    04A5  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el cl en AL con  +
+    923					 el cBlanco BL
+    924	    04A7  47				 inc		 di
+    925	    04A8  59				 pop		 cx
+    926	    04A9  E2 C1				 loop	 imprime_num2
+    927
+    928	    04AB			 no_lee_num:
+    929	    04AB  E9 FB8C			 jmp mouse_no_clic
+    930
+    931					 ; TODO	: Imprimir operación -	Convertir a dígitos
+    932
+    933	    04AE			 operacion_sumar:
+    934	    04AE  A1 0009r			 mov		 ax,[num1h]
+    935	    04B1  8B 1E	000Br			 mov		 bx,[num2h]
+    936	    04B5  03 C3				 add		 ax,bx
+    937	    04B7  E8 0BE2			 call	 NUM2DIG
+    938	    04BA  B9 0004			 mov		 cx,4d
+    939	    04BD  EB 13	90			 jmp	 imprime_resultado_prev
+    940
+    941	    04C0			 operacion_restar:
+    942	    04C0  A1 0009r			 mov		 ax,[num1h]
+    943	    04C3  8B 1E	000Br			 mov		 bx,[num2h]
+    944	    04C7  2B C3				 sub		 ax,bx
+    945	    04C9  E8 0BD0			 call	 NUM2DIG
+    946	    04CC  B9 0004			 mov		 cx,4d
+    947	    04CF  EB 01	90			 jmp	 imprime_resultado_prev
+    948
+    949	    04D2			 imprime_resultado_prev:
+    950	    04D2  33 FF				 xor		 di,di
+    951	    04D4			 imprime_resultado:
+    952	    04D4  51				 push	 cx
+    953	    04D5  C6 06	017Fr 28		 mov		 [col_aux],40d
+    954	    04DA  C6 06	017Er 03	     mov	 [ren_aux],3
+    955	    04DF  28 0E	017Fr			 sub		 [col_aux],cl
+    956						 posiciona_cursor [ren_aux],[col_aux]
+1   957	    04E3  8A 36	017Er			 mov dh,[ren_aux]	 ;dh = [ren_aux]
+1   958	    04E7  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1   959	    04EB  BB 0000			 mov bx,0
+1   960	    04EE  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1   961	    04F1  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+    962	    04F3  8A 8D	000Dr			 mov		 cl, byte PTR [resultado + di]
+    963	    04F7  80 C9	30			 or		 cl,30h
+    964	    04FA  80 F9	3A			 cmp		 cl,3Ah
+    965	    04FD  72 05	90 90			 jb		 imprime_resultado_dec
+    966	    0501  80 C1	07			 add	 cl,07h
+    967	    0504			 imprime_resultado_dec:
+    968						 imprime_caracter_color	cl,bgNegro,cBlanco
+1   969	    0504  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 18
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+1   970	    0506  8A C1				 mov al,cl		 ;DL = cl a imprimir
+1   971	    0508  B7 00				 mov bh,0				 ;BH = numero de pagina
+1   972	    050A  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cBlanco de fondo del cl
+1   973	    050C  80 F3	0F		     xor bl,cBlanco		 ;BL (4	bits menos significativos) = cBlanco del cl
+1   974	    050F  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el cl
+1   975	    0512  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el cl en AL con  +
+    976					 el cBlanco BL
+    977	    0514  47				 inc		 di
+    978	    0515  59				 pop		 cx
+    979	    0516  E2 BC				 loop	 imprime_resultado
+    980
+    981	    0518  E9 FB1F			 jmp mouse_no_clic
+    982
+    983					 ; * Si	no se encontró	el driver del mouse, muestra un	mensaje	y debe salir tecleando	    +
+    984					 [enter]
+    985	    051B			 teclado:
+    986	    051B  B4 08				 mov ah,08h
+    987	    051D  CD 21				 int 21h
+    988	    051F  3C 0D				 cmp al,0Dh		 ;compara la entrada de	teclado	si fue [enter]
+    989	    0521  75 F8				 jnz teclado	 ;Sale del ciclo hasta que presiona la tecla [enter]
+    990
+    991	    0523			 salir:
+    992						 clear
+1   993	    0523  B8 0003			 mov ax,0003h	 ;ah = 00h, selecciona modo video
+1   994	    0526  CD 10				 int 10h	 ;llama	interrupcion 10h con opcion 00h.
+    995
+    996					 ; ! REMOVER EN	LA VERSIÓN FINAL
+    997	    0528  A1 000Dr		   mov ax,[resultado]
+    998	    052B  8B EC			   mov	   bp,sp
+    999	    052D  BB 000A		   mov	   bx,10
+   1000	    0530			 loop_digitos:
+   1001	    0530  33 D2			   xor	   dx,dx
+   1002	    0532  F7 F3			   div	   bx
+   1003	    0534  52			   push	   dx
+   1004	    0535  3D 0000		   cmp	   ax,0h
+   1005	    0538  75 F6			   jne	   loop_digitos
+   1006	    053A  B8 0200		   mov	   ax,0200h
+   1007	    053D			 loop_imprimir:
+   1008	    053D  5A			   pop	   dx
+   1009	    053E  83 CA	30		   or	   dx,30h
+   1010	    0541  CD 21			   int 21h
+   1011	    0543  3B EC			   cmp	   bp,sp
+   1012	    0545  75 F6			   jne	   loop_imprimir
+   1013	    0547  BA 000A		   mov	   dx,000Ah
+   1014	    054A  CD 21			   int 21h
+   1015	    054C  83 C2	03		   add	   dx,0003h
+   1016	    054F  CD 21			   int 21h
+   1017					 ; ! REMOVER
+   1018
+   1019	    0551  B8 4C00			 mov ax,4C00h
+   1020	    0554  CD 21				 int 21h
+   1021
+   1022						 ;procedimiento	MARCO_UI
+   1023						 ;no requiere parametros de entrada
+   1024						 ;Dibuja el marco de la	interfaz de usuario del	programa
+   1025	    0556				 MARCO_UI proc
+   1026	    0556  33 FF					 xor di,di
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 19
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   1027	    0558  B9 0050				 mov cx,80d
+   1028	    055B  C6 06	017Fr 00			 mov [col_aux],0
+   1029	    0560				 marcos_horizontales:
+   1030	    0560  51					 push cx
+   1031							 ;Imprime marco	superior
+   1032							 posiciona_cursor 0,[col_aux]
+1  1033	    0561  B6 00				 mov dh,0	 ;dh = 0
+1  1034	    0563  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1  1035	    0567  BB 0000			 mov bx,0
+1  1036	    056A  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1037	    056D  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1038	    056F  80 BD	0062r 58			 cmp [marco_sup+di],'X'
+   1039	    0574  74 17	90 90				 je cerrar
+   1040	    0578				 superior:
+   1041							 imprime_caracter_color	[marco_sup+di],bgNegro,cBlanco
+1  1042	    0578  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1043	    057A  8A 85	0062r			 mov al,[marco_sup+di]		 ;DL = [marco_sup+di] a	imprimir
+1  1044	    057E  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1045	    0580  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cBlanco de fondo del	    +
+   1046					 [marco_sup+di]
+1  1047	    0582  80 F3	0F		     xor bl,cBlanco		 ;BL (4	bits menos significativos) = cBlanco del [marco_sup +
+   1048					 +di]
+1  1049	    0585  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   1050					 [marco_sup+di]
+1  1051	    0588  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el [marco_sup+di]+
+   1052					 en AL con el cBlanco BL
+   1053	    058A  EB 13	90				 jmp inferior
+   1054	    058D				 cerrar:
+   1055							 imprime_caracter_color	[marco_sup+di],bgNegro,cRojoClaro
+1  1056	    058D  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1057	    058F  8A 85	0062r			 mov al,[marco_sup+di]		 ;DL = [marco_sup+di] a	imprimir
+1  1058	    0593  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1059	    0595  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cRojoClaro de	fondo del   +
+   1060					 [marco_sup+di]
+1  1061	    0597  80 F3	0C		     xor bl,cRojoClaro		 ;BL (4	bits menos significativos) = cRojoClaro	del	    +
+   1062					 [marco_sup+di]
+1  1063	    059A  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   1064					 [marco_sup+di]
+1  1065	    059D  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el [marco_sup+di]+
+   1066					 en AL con el cRojoClaro BL
+   1067	    059F				 inferior:
+   1068							 ;Imprime marco	inferior
+   1069							 posiciona_cursor 24,[col_aux]
+1  1070	    059F  B6 18				 mov dh,24	 ;dh = 24
+1  1071	    05A1  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1  1072	    05A5  BB 0000			 mov bx,0
+1  1073	    05A8  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1074	    05AB  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1075							 imprime_caracter_color	[marco_inf+di],bgNegro,cBlanco
+1  1076	    05AD  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1077	    05AF  8A 85	00B3r			 mov al,[marco_inf+di]		 ;DL = [marco_inf+di] a	imprimir
+1  1078	    05B3  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1079	    05B5  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cBlanco de fondo del	    +
+   1080					 [marco_inf+di]
+1  1081	    05B7  80 F3	0F		     xor bl,cBlanco		 ;BL (4	bits menos significativos) = cBlanco del [marco_inf +
+   1082					 +di]
+1  1083	    05BA  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 20
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   1084					 [marco_inf+di]
+1  1085	    05BD  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el [marco_inf+di]+
+   1086					 en AL con el cBlanco BL
+   1087	    05BF  FE 06	017Fr				 inc [col_aux]
+   1088	    05C3  47					 inc di
+   1089	    05C4  59					 pop cx
+   1090	    05C5  E2 99					 loop marcos_horizontales
+   1091
+   1092							 ;Imprime marcos laterales
+   1093	    05C7  33 FF					 xor di,di
+   1094	    05C9  B9 0017				 mov cx,23		 ;cx = 23d = 17h. Prepara registro CX para loop.
+   1095											 ;para imprimir	los marcos laterales en	    +
+   1096					 pantalla, entre el segundo y el penúltimo renglones
+   1097	    05CC  C6 06	017Er 00			 mov [ren_aux],0
+   1098	    05D1				 marcos_verticales:
+   1099	    05D1  51					 push cx
+   1100	    05D2  FE 06	017Er				 inc [ren_aux]
+   1101							 posiciona_cursor [ren_aux],0
+1  1102	    05D6  8A 36	017Er			 mov dh,[ren_aux]	 ;dh = [ren_aux]
+1  1103	    05DA  B2 00				 mov dl,0	 ;dl = 0
+1  1104	    05DC  BB 0000			 mov bx,0
+1  1105	    05DF  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1106	    05E2  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1107							 imprime_caracter_color	[marco_lat],bgNegro,cBlanco
+1  1108	    05E4  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1109	    05E6  A0 00B2r			 mov al,[marco_lat]		 ;DL = [marco_lat] a imprimir
+1  1110	    05E9  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1111	    05EB  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cBlanco de fondo del	    +
+   1112					 [marco_lat]
+1  1113	    05ED  80 F3	0F		     xor bl,cBlanco		 ;BL (4	bits menos significativos) = cBlanco del [marco_lat]
+1  1114	    05F0  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   1115					 [marco_lat]
+1  1116	    05F3  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el [marco_lat] en+
+   1117					 AL con	el cBlanco BL
+   1118							 posiciona_cursor [ren_aux],79
+1  1119	    05F5  8A 36	017Er			 mov dh,[ren_aux]	 ;dh = [ren_aux]
+1  1120	    05F9  B2 4F				 mov dl,79	 ;dl = 79
+1  1121	    05FB  BB 0000			 mov bx,0
+1  1122	    05FE  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1123	    0601  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1124							 imprime_caracter_color	[marco_lat],bgNegro,cBlanco
+1  1125	    0603  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1126	    0605  A0 00B2r			 mov al,[marco_lat]		 ;DL = [marco_lat] a imprimir
+1  1127	    0608  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1128	    060A  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cBlanco de fondo del	    +
+   1129					 [marco_lat]
+1  1130	    060C  80 F3	0F		     xor bl,cBlanco		 ;BL (4	bits menos significativos) = cBlanco del [marco_lat]
+1  1131	    060F  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   1132					 [marco_lat]
+1  1133	    0612  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el [marco_lat] en+
+   1134					 AL con	el cBlanco BL
+   1135	    0614  59					 pop cx
+   1136	    0615  E2 BA					 loop marcos_verticales
+   1137	    0617  C3					 ret			 ;Regreso de llamada a procedimiento
+   1138	    0618				 endp				 ;Indica fin de	procedimiento UI para el ensamblador
+   1139
+   1140						 ;procedimiento	CALCULADORA_UI
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 21
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   1141						 ;no requiere parametros de entrada
+   1142						 ;Dibuja el marco de la	calculador en la interfaz de usuario del programa
+   1143	    0618				 CALCULADORA_UI	proc
+   1144	    0618  33 FF					 xor di,di
+   1145	    061A  B9 0032				 mov cx,50d
+   1146	    061D  C6 06	017Fr 0F			 mov [col_aux],15d
+   1147	    0622				 marcos_hor_cal:
+   1148	    0622  51					 push cx
+   1149							 ;Imprime marco	superior
+   1150							 posiciona_cursor 1,[col_aux]
+1  1151	    0623  B6 01				 mov dh,1	 ;dh = 1
+1  1152	    0625  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1  1153	    0629  BB 0000			 mov bx,0
+1  1154	    062C  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1155	    062F  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1156							 imprime_caracter_color	[marco_sup_cal+di],bgNegro,cCyanClaro
+1  1157	    0631  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1158	    0633  8A 85	0103r			 mov al,[marco_sup_cal+di]		 ;DL = [marco_sup_cal+di] a imprimir
+1  1159	    0637  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1160	    0639  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cCyanClaro de	fondo del   +
+   1161					 [marco_sup_cal+di]
+1  1162	    063B  80 F3	0B		     xor bl,cCyanClaro		 ;BL (4	bits menos significativos) = cCyanClaro	del	    +
+   1163					 [marco_sup_cal+di]
+1  1164	    063E  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   1165					 [marco_sup_cal+di]
+1  1166	    0641  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el [marco_sup_cal+
+   1167					 +di] en AL con	el cCyanClaro BL
+   1168							 ;Imprime marco	inferior
+   1169							 posiciona_cursor 23,[col_aux]
+1  1170	    0643  B6 17				 mov dh,23	 ;dh = 23
+1  1171	    0645  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1  1172	    0649  BB 0000			 mov bx,0
+1  1173	    064C  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1174	    064F  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1175							 imprime_caracter_color	[marco_inf_cal+di],bgNegro,cCyanClaro
+1  1176	    0651  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1177	    0653  8A 85	013Ar			 mov al,[marco_inf_cal+di]		 ;DL = [marco_inf_cal+di] a imprimir
+1  1178	    0657  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1179	    0659  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cCyanClaro de	fondo del   +
+   1180					 [marco_inf_cal+di]
+1  1181	    065B  80 F3	0B		     xor bl,cCyanClaro		 ;BL (4	bits menos significativos) = cCyanClaro	del	    +
+   1182					 [marco_inf_cal+di]
+1  1183	    065E  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   1184					 [marco_inf_cal+di]
+1  1185	    0661  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el [marco_inf_cal+
+   1186					 +di] en AL con	el cCyanClaro BL
+   1187	    0663  FE 06	017Fr				 inc [col_aux]
+   1188	    0667  47					 inc di
+   1189	    0668  59					 pop cx
+   1190	    0669  E2 B7					 loop marcos_hor_cal
+   1191
+   1192							 ;Imprime marcos laterales
+   1193	    066B  33 FF					 xor di,di
+   1194	    066D  B9 0015				 mov cx,21d		 ;cx = 20d. Prepara registro CX	para loop.
+   1195											 ;para imprimir	los marcos laterales en	    +
+   1196					 pantalla, entre el segundo y el penúltimo renglones
+   1197	    0670  C6 06	017Er 01			 mov [ren_aux],1
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 22
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   1198	    0675				 marcos_ver_cal:
+   1199	    0675  51					 push cx
+   1200	    0676  FE 06	017Er				 inc [ren_aux]
+   1201							 posiciona_cursor [ren_aux],15
+1  1202	    067A  8A 36	017Er			 mov dh,[ren_aux]	 ;dh = [ren_aux]
+1  1203	    067E  B2 0F				 mov dl,15	 ;dl = 15
+1  1204	    0680  BB 0000			 mov bx,0
+1  1205	    0683  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1206	    0686  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1207							 imprime_caracter_color	[marco_lat_cal],bgNegro,cCyanClaro
+1  1208	    0688  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1209	    068A  A0 0135r			 mov al,[marco_lat_cal]		 ;DL = [marco_lat_cal] a imprimir
+1  1210	    068D  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1211	    068F  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cCyanClaro de	fondo del   +
+   1212					 [marco_lat_cal]
+1  1213	    0691  80 F3	0B		     xor bl,cCyanClaro		 ;BL (4	bits menos significativos) = cCyanClaro	del	    +
+   1214					 [marco_lat_cal]
+1  1215	    0694  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   1216					 [marco_lat_cal]
+1  1217	    0697  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el		    +
+   1218					 [marco_lat_cal] en AL con el cCyanClaro BL
+   1219							 posiciona_cursor [ren_aux],64
+1  1220	    0699  8A 36	017Er			 mov dh,[ren_aux]	 ;dh = [ren_aux]
+1  1221	    069D  B2 40				 mov dl,64	 ;dl = 64
+1  1222	    069F  BB 0000			 mov bx,0
+1  1223	    06A2  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1224	    06A5  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1225							 imprime_caracter_color	[marco_lat_cal],bgNegro,cCyanClaro
+1  1226	    06A7  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1227	    06A9  A0 0135r			 mov al,[marco_lat_cal]		 ;DL = [marco_lat_cal] a imprimir
+1  1228	    06AC  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1229	    06AE  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cCyanClaro de	fondo del   +
+   1230					 [marco_lat_cal]
+1  1231	    06B0  80 F3	0B		     xor bl,cCyanClaro		 ;BL (4	bits menos significativos) = cCyanClaro	del	    +
+   1232					 [marco_lat_cal]
+1  1233	    06B3  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   1234					 [marco_lat_cal]
+1  1235	    06B6  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el		    +
+   1236					 [marco_lat_cal] en AL con el cCyanClaro BL
+   1237	    06B8  59					 pop cx
+   1238	    06B9  E2 BA					 loop marcos_ver_cal
+   1239
+   1240							 ;Imprime marco	horizontal interno
+   1241	    06BB  B9 0030				 mov cx,48
+   1242	    06BE  C6 06	017Fr 10			 mov [col_aux],16d
+   1243	    06C3				 marco_hor_interno_cal:
+   1244	    06C3  51					 push cx
+   1245							 posiciona_cursor 6,[col_aux]
+1  1246	    06C4  B6 06				 mov dh,6	 ;dh = 6
+1  1247	    06C6  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1  1248	    06CA  BB 0000			 mov bx,0
+1  1249	    06CD  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1250	    06D0  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1251							 imprime_caracter_color	[marco_hint_cal],bgNegro,cCyanClaro
+1  1252	    06D2  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1253	    06D4  A0 016Cr			 mov al,[marco_hint_cal]		 ;DL = [marco_hint_cal]	a imprimir
+1  1254	    06D7  B7 00				 mov bh,0				 ;BH = numero de pagina
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 23
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+1  1255	    06D9  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cCyanClaro de	fondo del   +
+   1256					 [marco_hint_cal]
+1  1257	    06DB  80 F3	0B		     xor bl,cCyanClaro		 ;BL (4	bits menos significativos) = cCyanClaro	del	    +
+   1258					 [marco_hint_cal]
+1  1259	    06DE  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   1260					 [marco_hint_cal]
+1  1261	    06E1  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el		    +
+   1262					 [marco_hint_cal] en AL	con el cCyanClaro BL
+   1263	    06E3  FE 06	017Fr				 inc [col_aux]
+   1264	    06E7  59					 pop cx
+   1265	    06E8  E2 D9					 loop marco_hor_interno_cal
+   1266
+   1267							 ;Imprime marco	vertical interno
+   1268	    06EA  B9 0010				 mov cx,16d
+   1269	    06ED  C6 06	017Er 07			 mov [ren_aux],7
+   1270	    06F2				 marco_ver_interno_cal:
+   1271	    06F2  51					 push cx
+   1272							 posiciona_cursor [ren_aux],49
+1  1273	    06F3  8A 36	017Er			 mov dh,[ren_aux]	 ;dh = [ren_aux]
+1  1274	    06F7  B2 31				 mov dl,49	 ;dl = 49
+1  1275	    06F9  BB 0000			 mov bx,0
+1  1276	    06FC  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1277	    06FF  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1278							 imprime_caracter_color	[marco_vint_cal],bgNegro,cCyanClaro
+1  1279	    0701  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1280	    0703  A0 016Dr			 mov al,[marco_vint_cal]		 ;DL = [marco_vint_cal]	a imprimir
+1  1281	    0706  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1282	    0708  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cCyanClaro de	fondo del   +
+   1283					 [marco_vint_cal]
+1  1284	    070A  80 F3	0B		     xor bl,cCyanClaro		 ;BL (4	bits menos significativos) = cCyanClaro	del	    +
+   1285					 [marco_vint_cal]
+1  1286	    070D  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   1287					 [marco_vint_cal]
+1  1288	    0710  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el		    +
+   1289					 [marco_vint_cal] en AL	con el cCyanClaro BL
+   1290	    0712  FE 06	017Er				 inc [ren_aux]
+   1291	    0716  59					 pop cx
+   1292	    0717  E2 D9					 loop marco_ver_interno_cal
+   1293
+   1294							 ;Imprime intersecciones
+   1295	    0719				 marco_intersecciones:
+   1296							 ;interseccion izquierda
+   1297							 posiciona_cursor 6,15
+1  1298	    0719  B6 06				 mov dh,6	 ;dh = 6
+1  1299	    071B  B2 0F				 mov dl,15	 ;dl = 15
+1  1300	    071D  BB 0000			 mov bx,0
+1  1301	    0720  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1302	    0723  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1303							 imprime_caracter_color	[marco_cizq_cal],bgNegro,cCyanClaro
+1  1304	    0725  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1305	    0727  A0 0138r			 mov al,[marco_cizq_cal]		 ;DL = [marco_cizq_cal]	a imprimir
+1  1306	    072A  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1307	    072C  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cCyanClaro de	fondo del   +
+   1308					 [marco_cizq_cal]
+1  1309	    072E  80 F3	0B		     xor bl,cCyanClaro		 ;BL (4	bits menos significativos) = cCyanClaro	del	    +
+   1310					 [marco_cizq_cal]
+1  1311	    0731  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 24
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   1312					 [marco_cizq_cal]
+1  1313	    0734  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el		    +
+   1314					 [marco_cizq_cal] en AL	con el cCyanClaro BL
+   1315							 ;interseccion derecha
+   1316							 posiciona_cursor 6,64
+1  1317	    0736  B6 06				 mov dh,6	 ;dh = 6
+1  1318	    0738  B2 40				 mov dl,64	 ;dl = 64
+1  1319	    073A  BB 0000			 mov bx,0
+1  1320	    073D  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1321	    0740  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1322							 imprime_caracter_color	[marco_cder_cal],bgNegro,cCyanClaro
+1  1323	    0742  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1324	    0744  A0 0139r			 mov al,[marco_cder_cal]		 ;DL = [marco_cder_cal]	a imprimir
+1  1325	    0747  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1326	    0749  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cCyanClaro de	fondo del   +
+   1327					 [marco_cder_cal]
+1  1328	    074B  80 F3	0B		     xor bl,cCyanClaro		 ;BL (4	bits menos significativos) = cCyanClaro	del	    +
+   1329					 [marco_cder_cal]
+1  1330	    074E  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   1331					 [marco_cder_cal]
+1  1332	    0751  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el		    +
+   1333					 [marco_cder_cal] en AL	con el cCyanClaro BL
+   1334							 ;interseccion superior
+   1335							 posiciona_cursor 6,49
+1  1336	    0753  B6 06				 mov dh,6	 ;dh = 6
+1  1337	    0755  B2 31				 mov dl,49	 ;dl = 49
+1  1338	    0757  BB 0000			 mov bx,0
+1  1339	    075A  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1340	    075D  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1341							 imprime_caracter_color	[marco_csup_cal],bgNegro,cCyanClaro
+1  1342	    075F  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1343	    0761  A0 0136r			 mov al,[marco_csup_cal]		 ;DL = [marco_csup_cal]	a imprimir
+1  1344	    0764  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1345	    0766  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cCyanClaro de	fondo del   +
+   1346					 [marco_csup_cal]
+1  1347	    0768  80 F3	0B		     xor bl,cCyanClaro		 ;BL (4	bits menos significativos) = cCyanClaro	del	    +
+   1348					 [marco_csup_cal]
+1  1349	    076B  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   1350					 [marco_csup_cal]
+1  1351	    076E  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el		    +
+   1352					 [marco_csup_cal] en AL	con el cCyanClaro BL
+   1353							 ;interseccion inferior
+   1354							 posiciona_cursor 23,49
+1  1355	    0770  B6 17				 mov dh,23	 ;dh = 23
+1  1356	    0772  B2 31				 mov dl,49	 ;dl = 49
+1  1357	    0774  BB 0000			 mov bx,0
+1  1358	    0777  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1359	    077A  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1360							 imprime_caracter_color	[marco_cinf_cal],bgNegro,cCyanClaro
+1  1361	    077C  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1362	    077E  A0 0137r			 mov al,[marco_cinf_cal]		 ;DL = [marco_cinf_cal]	a imprimir
+1  1363	    0781  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1364	    0783  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cCyanClaro de	fondo del   +
+   1365					 [marco_cinf_cal]
+1  1366	    0785  80 F3	0B		     xor bl,cCyanClaro		 ;BL (4	bits menos significativos) = cCyanClaro	del	    +
+   1367					 [marco_cinf_cal]
+1  1368	    0788  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 25
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   1369					 [marco_cinf_cal]
+1  1370	    078B  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el		    +
+   1371					 [marco_cinf_cal] en AL	con el cCyanClaro BL
+   1372
+   1373						 ;Imprimir botones
+   1374							 ;Imprime Boton	0
+   1375	    078D  C6 06	017Br 18			 mov [boton_columna],24
+   1376	    0792  C6 06	017Ar 13			 mov [boton_renglon],19
+   1377	    0797  C6 06	017Cr 50			 mov [boton_color],bgMagenta
+   1378	    079C  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1379	    07A1  C6 06	0179r 30			 mov [boton_caracter],'0'
+   1380	    07A6  E8 0658				 call IMPRIME_BOTON
+   1381
+   1382							 ;Imprime Boton	1
+   1383	    07A9  C6 06	017Br 18			 mov [boton_columna],24
+   1384	    07AE  C6 06	017Ar 0F			 mov [boton_renglon],15
+   1385	    07B3  C6 06	017Cr 50			 mov [boton_color],bgMagenta
+   1386	    07B8  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1387	    07BD  C6 06	0179r 31			 mov [boton_caracter],'1'
+   1388	    07C2  E8 063C				 call IMPRIME_BOTON
+   1389
+   1390							 ;Imprime Boton	2
+   1391	    07C5  C6 06	017Br 1E			 mov [boton_columna],30
+   1392	    07CA  C6 06	017Ar 0F			 mov [boton_renglon],15
+   1393	    07CF  80 3E	0000r 01		 cmp baseSel,baseHex
+   1394	    07D4  74 18	90 90			 je imp_boton_2_enable
+   1395	    07D8  80 3E	0000r 00			 cmp baseSel,baseDec
+   1396	    07DD  74 0F	90 90				 je imp_boton_2_enable
+   1397	    07E1  C6 06	017Cr 80		 mov [boton_color],bgGrisOscuro
+   1398	    07E6  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1399	    07EB  EB 0B	90			 jmp imp_boton_2
+   1400	    07EE			 imp_boton_2_enable:
+   1401	    07EE  C6 06	017Cr 30		 mov [boton_color],bgCyan
+   1402	    07F3  C6 06	017Dr 00		 mov [boton_caracter_color],cNegro
+   1403	    07F8			 imp_boton_2:
+   1404	    07F8  C6 06	0179r 32			 mov [boton_caracter],'2'
+   1405	    07FD  E8 0601				 call IMPRIME_BOTON
+   1406
+   1407							 ;Imprime Boton	3
+   1408	    0800  C6 06	017Br 24			 mov [boton_columna],36
+   1409	    0805  C6 06	017Ar 0F			 mov [boton_renglon],15
+   1410	    080A  80 3E	0000r 01		 cmp baseSel,baseHex
+   1411	    080F  74 18	90 90			 je imp_boton_3_enable
+   1412	    0813  80 3E	0000r 00		 cmp baseSel,baseDec
+   1413	    0818  74 0F	90 90			 je imp_boton_3_enable
+   1414	    081C  C6 06	017Cr 80		 mov [boton_color],bgGrisOscuro
+   1415	    0821  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1416	    0826  EB 0B	90			 jmp imp_boton_3
+   1417	    0829			 imp_boton_3_enable:
+   1418	    0829  C6 06	017Cr 30		 mov [boton_color],bgCyan
+   1419	    082E  C6 06	017Dr 00		 mov [boton_caracter_color],cNegro
+   1420	    0833			 imp_boton_3:
+   1421	    0833  C6 06	0179r 33			 mov [boton_caracter],'3'
+   1422	    0838  E8 05C6				 call IMPRIME_BOTON
+   1423
+   1424							 ;Imprime Boton	4
+   1425	    083B  C6 06	017Br 18			 mov [boton_columna],24
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 26
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   1426	    0840  C6 06	017Ar 0B			 mov [boton_renglon],11
+   1427	    0845  80 3E	0000r 01		 cmp baseSel,baseHex
+   1428	    084A  74 18	90 90			 je imp_boton_4_enable
+   1429	    084E  80 3E	0000r 00		 cmp baseSel,baseDec
+   1430	    0853  74 0F	90 90			 je imp_boton_4_enable
+   1431	    0857  C6 06	017Cr 80		 mov [boton_color],bgGrisOscuro
+   1432	    085C  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1433	    0861  EB 0B	90			 jmp imp_boton_4
+   1434	    0864			 imp_boton_4_enable:
+   1435	    0864  C6 06	017Cr 30		 mov [boton_color],bgCyan
+   1436	    0869  C6 06	017Dr 00		 mov [boton_caracter_color],cNegro
+   1437	    086E			 imp_boton_4:
+   1438	    086E  C6 06	0179r 34			 mov [boton_caracter],'4'
+   1439	    0873  E8 058B				 call IMPRIME_BOTON
+   1440
+   1441							 ;Imprime Boton	5
+   1442	    0876  C6 06	017Br 1E			 mov [boton_columna],30
+   1443	    087B  C6 06	017Ar 0B			 mov [boton_renglon],11
+   1444	    0880  80 3E	0000r 01		 cmp baseSel,baseHex
+   1445	    0885  74 18	90 90			 je imp_boton_5_enable
+   1446	    0889  80 3E	0000r 00		 cmp baseSel,baseDec
+   1447	    088E  74 0F	90 90			 je imp_boton_5_enable
+   1448	    0892  C6 06	017Cr 80		 mov [boton_color],bgGrisOscuro
+   1449	    0897  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1450	    089C  EB 0B	90			 jmp imp_boton_5
+   1451	    089F			 imp_boton_5_enable:
+   1452	    089F  C6 06	017Cr 30		 mov [boton_color],bgCyan
+   1453	    08A4  C6 06	017Dr 00		 mov [boton_caracter_color],cNegro
+   1454	    08A9			 imp_boton_5:
+   1455	    08A9  C6 06	0179r 35			 mov [boton_caracter],'5'
+   1456	    08AE  E8 0550				 call IMPRIME_BOTON
+   1457
+   1458							 ;Imprime Boton	6
+   1459	    08B1  C6 06	017Br 24			 mov [boton_columna],36
+   1460	    08B6  C6 06	017Ar 0B			 mov [boton_renglon],11
+   1461	    08BB  80 3E	0000r 01		 cmp baseSel,baseHex
+   1462	    08C0  74 18	90 90			 je imp_boton_6_enable
+   1463	    08C4  80 3E	0000r 00		 cmp baseSel,baseDec
+   1464	    08C9  74 0F	90 90			 je imp_boton_6_enable
+   1465	    08CD  C6 06	017Cr 80		 mov [boton_color],bgGrisOscuro
+   1466	    08D2  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1467	    08D7  EB 0B	90			 jmp imp_boton_6
+   1468	    08DA			 imp_boton_6_enable:
+   1469	    08DA  C6 06	017Cr 30		 mov [boton_color],bgCyan
+   1470	    08DF  C6 06	017Dr 00		 mov [boton_caracter_color],cNegro
+   1471	    08E4			 imp_boton_6:
+   1472	    08E4  C6 06	0179r 36			 mov [boton_caracter],'6'
+   1473	    08E9  E8 0515				 call IMPRIME_BOTON
+   1474
+   1475							 ;Imprime Boton	7
+   1476	    08EC  C6 06	017Br 18			 mov [boton_columna],24
+   1477	    08F1  C6 06	017Ar 07			 mov [boton_renglon],7
+   1478	    08F6  80 3E	0000r 01		 cmp baseSel,baseHex
+   1479	    08FB  74 18	90 90			 je imp_boton_7_enable
+   1480	    08FF  80 3E	0000r 00		 cmp baseSel,baseDec
+   1481	    0904  74 0F	90 90			 je imp_boton_7_enable
+   1482	    0908  C6 06	017Cr 80		 mov [boton_color],bgGrisOscuro
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 27
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   1483	    090D  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1484	    0912  EB 0B	90			 jmp imp_boton_7
+   1485	    0915			 imp_boton_7_enable:
+   1486	    0915  C6 06	017Cr 30		 mov [boton_color],bgCyan
+   1487	    091A  C6 06	017Dr 00		 mov [boton_caracter_color],cNegro
+   1488	    091F			 imp_boton_7:
+   1489	    091F  C6 06	0179r 37			 mov [boton_caracter],'7'
+   1490	    0924  E8 04DA				 call IMPRIME_BOTON
+   1491
+   1492							 ;Imprime Boton	8
+   1493	    0927  C6 06	017Br 1E			 mov [boton_columna],30
+   1494	    092C  C6 06	017Ar 07			 mov [boton_renglon],7
+   1495	    0931  80 3E	0000r 01		 cmp baseSel,baseHex
+   1496	    0936  74 18	90 90			 je imp_boton_8_enable
+   1497	    093A  80 3E	0000r 00		 cmp baseSel,baseDec
+   1498	    093F  74 0F	90 90			 je imp_boton_8_enable
+   1499	    0943  C6 06	017Cr 80		 mov [boton_color],bgGrisOscuro
+   1500	    0948  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1501	    094D  EB 0B	90			 jmp imp_boton_8
+   1502	    0950			 imp_boton_8_enable:
+   1503	    0950  C6 06	017Cr 30		 mov [boton_color],bgCyan
+   1504	    0955  C6 06	017Dr 00		 mov [boton_caracter_color],cNegro
+   1505	    095A			 imp_boton_8:
+   1506	    095A  C6 06	0179r 38			 mov [boton_caracter],'8'
+   1507	    095F  E8 049F				 call IMPRIME_BOTON
+   1508
+   1509							 ;Imprime Boton	9
+   1510	    0962  C6 06	017Br 24			 mov [boton_columna],36
+   1511	    0967  C6 06	017Ar 07			 mov [boton_renglon],7
+   1512	    096C  80 3E	0000r 01		 cmp baseSel,baseHex
+   1513	    0971  74 18	90 90			 je imp_boton_9_enable
+   1514	    0975  80 3E	0000r 00		 cmp baseSel,baseDec
+   1515	    097A  74 0F	90 90			 je imp_boton_9_enable
+   1516	    097E  C6 06	017Cr 80		 mov [boton_color],bgGrisOscuro
+   1517	    0983  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1518	    0988  EB 0B	90			 jmp imp_boton_9
+   1519	    098B			 imp_boton_9_enable:
+   1520	    098B  C6 06	017Cr 30		 mov [boton_color],bgCyan
+   1521	    0990  C6 06	017Dr 00		 mov [boton_caracter_color],cNegro
+   1522	    0995			 imp_boton_9:
+   1523	    0995  C6 06	0179r 39			 mov [boton_caracter],'9'
+   1524	    099A  E8 0464				 call IMPRIME_BOTON
+   1525
+   1526							 ;Imprime Boton	A
+   1527	    099D  C6 06	017Br 1E			 mov [boton_columna],30
+   1528	    09A2  C6 06	017Ar 13			 mov [boton_renglon],19
+   1529	    09A7  80 3E	0000r 01			 cmp	 baseSel,baseHex
+   1530	    09AC  74 0F	90 90				 je	 imp_boton_A_enable
+   1531	    09B0  C6 06	017Cr 80			 mov [boton_color],bgGrisOscuro
+   1532	    09B5  C6 06	017Dr 0F			 mov [boton_caracter_color],cBlanco
+   1533	    09BA  EB 0B	90				 jmp imp_boton_A
+   1534	    09BD			 imp_boton_A_enable:
+   1535	    09BD  C6 06	017Cr 20			 mov [boton_color],bgVerde
+   1536	    09C2  C6 06	017Dr 00		 mov [boton_caracter_color],cNegro
+   1537	    09C7			 imp_boton_A:
+   1538	    09C7  C6 06	0179r 41			 mov [boton_caracter],'A'
+   1539	    09CC  E8 0432				 call IMPRIME_BOTON
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 28
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   1540
+   1541							 ;Imprime Boton	B
+   1542	    09CF  C6 06	017Br 24			 mov [boton_columna],36
+   1543	    09D4  C6 06	017Ar 13			 mov [boton_renglon],19
+   1544	    09D9  80 3E	0000r 01			 cmp	 baseSel,baseHex
+   1545	    09DE  74 0F	90 90				 je	 imp_boton_B_enable
+   1546	    09E2  C6 06	017Cr 80			 mov [boton_color],bgGrisOscuro
+   1547	    09E7  C6 06	017Dr 0F			 mov [boton_caracter_color],cBlanco
+   1548	    09EC  EB 0B	90				 jmp imp_boton_B
+   1549	    09EF			 imp_boton_B_enable:
+   1550	    09EF  C6 06	017Cr 20			 mov [boton_color],bgVerde
+   1551	    09F4  C6 06	017Dr 00		 mov [boton_caracter_color],cNegro
+   1552	    09F9			 imp_boton_B:
+   1553	    09F9  C6 06	0179r 42			 mov [boton_caracter],'B'
+   1554	    09FE  E8 0400				 call IMPRIME_BOTON
+   1555
+   1556							 ;Imprime Boton	C
+   1557	    0A01  C6 06	017Br 2A			 mov [boton_columna],42
+   1558	    0A06  C6 06	017Ar 13			 mov [boton_renglon],19
+   1559	    0A0B  80 3E	0000r 01		 cmp	 baseSel,baseHex
+   1560	    0A10  74 0F	90 90			 je	 imp_boton_C_enable
+   1561	    0A14  C6 06	017Cr 80		 mov [boton_color],bgGrisOscuro
+   1562	    0A19  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1563	    0A1E  EB 0B	90			 jmp imp_boton_C
+   1564	    0A21			 imp_boton_C_enable:
+   1565	    0A21  C6 06	017Cr 20		 mov [boton_color],bgVerde
+   1566	    0A26  C6 06	017Dr 00		 mov [boton_caracter_color],cNegro
+   1567	    0A2B			 imp_boton_C:
+   1568	    0A2B  C6 06	0179r 43			 mov [boton_caracter],'C'
+   1569	    0A30  E8 03CE				 call IMPRIME_BOTON
+   1570
+   1571							 ;Imprime Boton	D
+   1572	    0A33  C6 06	017Br 2A			 mov [boton_columna],42
+   1573	    0A38  C6 06	017Ar 0F			 mov [boton_renglon],15
+   1574	    0A3D  80 3E	0000r 01		 cmp	 baseSel,baseHex
+   1575	    0A42  74 0F	90 90			 je	 imp_boton_D_enable
+   1576	    0A46  C6 06	017Cr 80		 mov [boton_color],bgGrisOscuro
+   1577	    0A4B  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1578	    0A50  EB 0B	90			 jmp imp_boton_D
+   1579	    0A53			 imp_boton_D_enable:
+   1580	    0A53  C6 06	017Cr 20		 mov [boton_color],bgVerde
+   1581	    0A58  C6 06	017Dr 00		 mov [boton_caracter_color],cNegro
+   1582	    0A5D			 imp_boton_D:
+   1583	    0A5D  C6 06	0179r 44			 mov [boton_caracter],'D'
+   1584	    0A62  E8 039C				 call IMPRIME_BOTON
+   1585
+   1586							 ;Imprime Boton	E
+   1587	    0A65  C6 06	017Br 2A			 mov [boton_columna],42
+   1588	    0A6A  C6 06	017Ar 0B			 mov [boton_renglon],11
+   1589	    0A6F  80 3E	0000r 01		 cmp	 baseSel,baseHex
+   1590	    0A74  74 0F	90 90			 je	 imp_boton_E_enable
+   1591	    0A78  C6 06	017Cr 80		 mov [boton_color],bgGrisOscuro
+   1592	    0A7D  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1593	    0A82  EB 0B	90			 jmp imp_boton_E
+   1594	    0A85			 imp_boton_E_enable:
+   1595	    0A85  C6 06	017Cr 20		 mov [boton_color],bgVerde
+   1596	    0A8A  C6 06	017Dr 00		 mov [boton_caracter_color],cNegro
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 29
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   1597	    0A8F			 imp_boton_E:
+   1598	    0A8F  C6 06	0179r 45			 mov [boton_caracter],'E'
+   1599	    0A94  E8 036A				 call IMPRIME_BOTON
+   1600
+   1601						 ;Imprime Boton	F
+   1602	    0A97  C6 06	017Br 2A			 mov [boton_columna],42
+   1603	    0A9C  C6 06	017Ar 07			 mov [boton_renglon],7
+   1604	    0AA1  80 3E	0000r 01		 cmp	 baseSel,baseHex
+   1605	    0AA6  74 0F	90 90			 je	 imp_boton_F_enable
+   1606	    0AAA  C6 06	017Cr 80		 mov [boton_color],bgGrisOscuro
+   1607	    0AAF  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1608	    0AB4  EB 0B	90			 jmp imp_boton_F
+   1609	    0AB7			 imp_boton_F_enable:
+   1610	    0AB7  C6 06	017Cr 20		 mov [boton_color],bgVerde
+   1611	    0ABC  C6 06	017Dr 00		 mov [boton_caracter_color],cNegro
+   1612	    0AC1			 imp_boton_F:
+   1613	    0AC1  C6 06	0179r 46			 mov [boton_caracter],'F'
+   1614	    0AC6  E8 0338				 call IMPRIME_BOTON
+   1615
+   1616							 ;Imprime Boton	+
+   1617	    0AC9  C6 06	017Br 33			 mov [boton_columna],51
+   1618	    0ACE  C6 06	017Ar 09			 mov [boton_renglon],9
+   1619	    0AD3  C6 06	017Cr E0			 mov [boton_color],bgAmarillo
+   1620	    0AD8  C6 06	017Dr 04		 mov [boton_caracter_color],cRojo
+   1621	    0ADD  C6 06	0179r 2B			 mov [boton_caracter],'+'
+   1622	    0AE2  E8 031C				 call IMPRIME_BOTON
+   1623
+   1624							 ;Imprime Boton	-
+   1625	    0AE5  C6 06	017Br 3A			 mov [boton_columna],58
+   1626	    0AEA  C6 06	017Ar 09			 mov [boton_renglon],9
+   1627	    0AEF  C6 06	017Cr E0			 mov [boton_color],bgAmarillo
+   1628	    0AF4  C6 06	017Dr 04		 mov [boton_caracter_color],cRojo
+   1629	    0AF9  C6 06	0179r 2D			 mov [boton_caracter],'-'
+   1630	    0AFE  E8 0300				 call IMPRIME_BOTON
+   1631
+   1632							 ;Imprime Boton	*
+   1633	    0B01  C6 06	017Br 33			 mov [boton_columna],51
+   1634	    0B06  C6 06	017Ar 0D			 mov [boton_renglon],13
+   1635	    0B0B  C6 06	017Cr E0			 mov [boton_color],bgAmarillo
+   1636	    0B10  C6 06	017Dr 04		 mov [boton_caracter_color],cRojo
+   1637	    0B15  C6 06	0179r 2A			 mov [boton_caracter],'*'
+   1638	    0B1A  E8 02E4				 call IMPRIME_BOTON
+   1639
+   1640							 ;Imprime Boton	/
+   1641	    0B1D  C6 06	017Br 3A			 mov [boton_columna],58
+   1642	    0B22  C6 06	017Ar 0D			 mov [boton_renglon],13
+   1643	    0B27  C6 06	017Cr E0			 mov [boton_color],bgAmarillo
+   1644	    0B2C  C6 06	017Dr 04		 mov [boton_caracter_color],cRojo
+   1645	    0B31  C6 06	0179r 2F			 mov [boton_caracter],'/'
+   1646	    0B36  E8 02C8				 call IMPRIME_BOTON
+   1647
+   1648							 ;Imprime Boton	%
+   1649	    0B39  C6 06	017Br 33			 mov [boton_columna],51
+   1650	    0B3E  C6 06	017Ar 11			 mov [boton_renglon],17
+   1651	    0B43  C6 06	017Cr E0			 mov [boton_color],bgAmarillo
+   1652	    0B48  C6 06	017Dr 04		 mov [boton_caracter_color],cRojo
+   1653	    0B4D  C6 06	0179r 25			 mov [boton_caracter],'%'
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 30
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   1654	    0B52  E8 02AC				 call IMPRIME_BOTON
+   1655
+   1656							 ;Imprime Boton	=
+   1657	    0B55  C6 06	017Br 3A			 mov [boton_columna],58
+   1658	    0B5A  C6 06	017Ar 11			 mov [boton_renglon],17
+   1659	    0B5F  C6 06	017Cr 40			 mov [boton_color],bgRojo
+   1660	    0B64  C6 06	017Dr 00		 mov [boton_caracter_color],cNegro
+   1661	    0B69  C6 06	0179r 3D			 mov [boton_caracter],'='
+   1662	    0B6E  E8 0290				 call IMPRIME_BOTON
+   1663
+   1664						 ;Imprime Boton	Dec
+   1665	    0B71  C6 06	017Br 11			 mov [boton_columna],17
+   1666	    0B76  C6 06	017Ar 07			 mov [boton_renglon],7
+   1667	    0B7B  80 3E	0000r 00			 cmp [baseSel],baseDec
+   1668	    0B80  74 0A	90 90				 je boton_dec_enabled
+   1669	    0B84  C6 06	017Cr 10			 mov [boton_color],bgAzul
+   1670	    0B89  EB 06	90				 jmp imp_boton_dec
+   1671	    0B8C			 boton_dec_enabled:
+   1672	    0B8C  C6 06	017Cr 90			 mov [boton_color],bgAzulClaro
+   1673	    0B91			 imp_boton_dec:
+   1674	    0B91  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1675	    0B96  E8 0268				 call IMPRIME_BOTON
+   1676	    0B99  FE 06	017Br			 inc [boton_columna]
+   1677	    0B9D  FE 06	017Ar			 inc [boton_renglon]
+   1678						 posiciona_cursor [boton_renglon],[boton_columna]
+1  1679	    0BA1  8A 36	017Ar			 mov dh,[boton_renglon]	 ;dh = [boton_renglon]
+1  1680	    0BA5  8A 16	017Br			 mov dl,[boton_columna]	 ;dl = [boton_columna]
+1  1681	    0BA9  BB 0000			 mov bx,0
+1  1682	    0BAC  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1683	    0BAF  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1684							 imprime_caracter_color	'D',[boton_color],[boton_caracter_color]
+1  1685	    0BB1  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1686	    0BB3  B0 44				 mov al,'D'		 ;DL = 'D' a imprimir
+1  1687	    0BB5  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1688	    0BB7  8A 1E	017Cr			 mov bl,[boton_color]	      ;BL (4 bits mas significativos) =			    +
+   1689					 [boton_caracter_color]	de fondo del 'D'
+1  1690	    0BBB  32 1E	017Dr		     xor bl,[boton_caracter_color]		 ;BL (4	bits menos significativos) =	    +
+   1691					 [boton_caracter_color]	del 'D'
+1  1692	    0BBF  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el 'D'
+1  1693	    0BC2  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el 'D' en AL	con +
+   1694					 el [boton_caracter_color] BL
+   1695	    0BC4  FE 06	017Br			 inc [boton_columna]
+   1696						 posiciona_cursor [boton_renglon],[boton_columna]
+1  1697	    0BC8  8A 36	017Ar			 mov dh,[boton_renglon]	 ;dh = [boton_renglon]
+1  1698	    0BCC  8A 16	017Br			 mov dl,[boton_columna]	 ;dl = [boton_columna]
+1  1699	    0BD0  BB 0000			 mov bx,0
+1  1700	    0BD3  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1701	    0BD6  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1702							 imprime_caracter_color	'e',[boton_color],[boton_caracter_color]
+1  1703	    0BD8  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1704	    0BDA  B0 65				 mov al,'e'		 ;DL = 'e' a imprimir
+1  1705	    0BDC  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1706	    0BDE  8A 1E	017Cr			 mov bl,[boton_color]	      ;BL (4 bits mas significativos) =			    +
+   1707					 [boton_caracter_color]	de fondo del 'e'
+1  1708	    0BE2  32 1E	017Dr		     xor bl,[boton_caracter_color]		 ;BL (4	bits menos significativos) =	    +
+   1709					 [boton_caracter_color]	del 'e'
+1  1710	    0BE6  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el 'e'
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 31
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+1  1711	    0BE9  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el 'e' en AL	con +
+   1712					 el [boton_caracter_color] BL
+   1713	    0BEB  FE 06	017Br			 inc [boton_columna]
+   1714						 posiciona_cursor [boton_renglon],[boton_columna]
+1  1715	    0BEF  8A 36	017Ar			 mov dh,[boton_renglon]	 ;dh = [boton_renglon]
+1  1716	    0BF3  8A 16	017Br			 mov dl,[boton_columna]	 ;dl = [boton_columna]
+1  1717	    0BF7  BB 0000			 mov bx,0
+1  1718	    0BFA  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1719	    0BFD  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1720							 imprime_caracter_color	'c',[boton_color],[boton_caracter_color]
+1  1721	    0BFF  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1722	    0C01  B0 63				 mov al,'c'		 ;DL = 'c' a imprimir
+1  1723	    0C03  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1724	    0C05  8A 1E	017Cr			 mov bl,[boton_color]	      ;BL (4 bits mas significativos) =			    +
+   1725					 [boton_caracter_color]	de fondo del 'c'
+1  1726	    0C09  32 1E	017Dr		     xor bl,[boton_caracter_color]		 ;BL (4	bits menos significativos) =	    +
+   1727					 [boton_caracter_color]	del 'c'
+1  1728	    0C0D  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el 'c'
+1  1729	    0C10  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el 'c' en AL	con +
+   1730					 el [boton_caracter_color] BL
+   1731
+   1732						 ;Imprime Boton	Hex
+   1733	    0C12  C6 06	017Br 11			 mov [boton_columna],17
+   1734	    0C17  C6 06	017Ar 0B			 mov [boton_renglon],11
+   1735	    0C1C  80 3E	0000r 01			 cmp [baseSel],baseHex
+   1736	    0C21  74 0A	90 90				 je boton_hex_enabled
+   1737	    0C25  C6 06	017Cr 10			 mov [boton_color],bgAzul
+   1738	    0C2A  EB 06	90				 jmp imp_boton_hex
+   1739	    0C2D			 boton_hex_enabled:
+   1740	    0C2D  C6 06	017Cr 90			 mov [boton_color],bgAzulClaro
+   1741	    0C32			 imp_boton_hex:
+   1742	    0C32  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1743	    0C37  E8 01C7				 call IMPRIME_BOTON
+   1744	    0C3A  FE 06	017Br			 inc [boton_columna]
+   1745	    0C3E  FE 06	017Ar			 inc [boton_renglon]
+   1746						 posiciona_cursor [boton_renglon],[boton_columna]
+1  1747	    0C42  8A 36	017Ar			 mov dh,[boton_renglon]	 ;dh = [boton_renglon]
+1  1748	    0C46  8A 16	017Br			 mov dl,[boton_columna]	 ;dl = [boton_columna]
+1  1749	    0C4A  BB 0000			 mov bx,0
+1  1750	    0C4D  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1751	    0C50  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1752							 imprime_caracter_color	'H',[boton_color],[boton_caracter_color]
+1  1753	    0C52  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1754	    0C54  B0 48				 mov al,'H'		 ;DL = 'H' a imprimir
+1  1755	    0C56  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1756	    0C58  8A 1E	017Cr			 mov bl,[boton_color]	      ;BL (4 bits mas significativos) =			    +
+   1757					 [boton_caracter_color]	de fondo del 'H'
+1  1758	    0C5C  32 1E	017Dr		     xor bl,[boton_caracter_color]		 ;BL (4	bits menos significativos) =	    +
+   1759					 [boton_caracter_color]	del 'H'
+1  1760	    0C60  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el 'H'
+1  1761	    0C63  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el 'H' en AL	con +
+   1762					 el [boton_caracter_color] BL
+   1763	    0C65  FE 06	017Br			 inc [boton_columna]
+   1764						 posiciona_cursor [boton_renglon],[boton_columna]
+1  1765	    0C69  8A 36	017Ar			 mov dh,[boton_renglon]	 ;dh = [boton_renglon]
+1  1766	    0C6D  8A 16	017Br			 mov dl,[boton_columna]	 ;dl = [boton_columna]
+1  1767	    0C71  BB 0000			 mov bx,0
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 32
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+1  1768	    0C74  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1769	    0C77  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1770							 imprime_caracter_color	'e',[boton_color],[boton_caracter_color]
+1  1771	    0C79  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1772	    0C7B  B0 65				 mov al,'e'		 ;DL = 'e' a imprimir
+1  1773	    0C7D  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1774	    0C7F  8A 1E	017Cr			 mov bl,[boton_color]	      ;BL (4 bits mas significativos) =			    +
+   1775					 [boton_caracter_color]	de fondo del 'e'
+1  1776	    0C83  32 1E	017Dr		     xor bl,[boton_caracter_color]		 ;BL (4	bits menos significativos) =	    +
+   1777					 [boton_caracter_color]	del 'e'
+1  1778	    0C87  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el 'e'
+1  1779	    0C8A  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el 'e' en AL	con +
+   1780					 el [boton_caracter_color] BL
+   1781	    0C8C  FE 06	017Br			 inc [boton_columna]
+   1782						 posiciona_cursor [boton_renglon],[boton_columna]
+1  1783	    0C90  8A 36	017Ar			 mov dh,[boton_renglon]	 ;dh = [boton_renglon]
+1  1784	    0C94  8A 16	017Br			 mov dl,[boton_columna]	 ;dl = [boton_columna]
+1  1785	    0C98  BB 0000			 mov bx,0
+1  1786	    0C9B  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1787	    0C9E  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1788							 imprime_caracter_color	'x',[boton_color],[boton_caracter_color]
+1  1789	    0CA0  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1790	    0CA2  B0 78				 mov al,'x'		 ;DL = 'x' a imprimir
+1  1791	    0CA4  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1792	    0CA6  8A 1E	017Cr			 mov bl,[boton_color]	      ;BL (4 bits mas significativos) =			    +
+   1793					 [boton_caracter_color]	de fondo del 'x'
+1  1794	    0CAA  32 1E	017Dr		     xor bl,[boton_caracter_color]		 ;BL (4	bits menos significativos) =	    +
+   1795					 [boton_caracter_color]	del 'x'
+1  1796	    0CAE  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el 'x'
+1  1797	    0CB1  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el 'x' en AL	con +
+   1798					 el [boton_caracter_color] BL
+   1799
+   1800						 ;Imprime Boton	Bin
+   1801	    0CB3  C6 06	017Br 11			 mov [boton_columna],17
+   1802	    0CB8  C6 06	017Ar 0F			 mov [boton_renglon],15
+   1803	    0CBD  80 3E	0000r 02			 cmp [baseSel],baseBin
+   1804	    0CC2  74 0A	90 90				 je boton_bin_enabled
+   1805	    0CC6  C6 06	017Cr 10			 mov [boton_color],bgAzul
+   1806	    0CCB  EB 06	90				 jmp imp_boton_bin
+   1807	    0CCE			 boton_bin_enabled:
+   1808	    0CCE  C6 06	017Cr 90			 mov [boton_color],bgAzulClaro
+   1809	    0CD3			 imp_boton_bin:
+   1810	    0CD3  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1811	    0CD8  E8 0126				 call IMPRIME_BOTON
+   1812	    0CDB  FE 06	017Br			 inc [boton_columna]
+   1813	    0CDF  FE 06	017Ar			 inc [boton_renglon]
+   1814						 posiciona_cursor [boton_renglon],[boton_columna]
+1  1815	    0CE3  8A 36	017Ar			 mov dh,[boton_renglon]	 ;dh = [boton_renglon]
+1  1816	    0CE7  8A 16	017Br			 mov dl,[boton_columna]	 ;dl = [boton_columna]
+1  1817	    0CEB  BB 0000			 mov bx,0
+1  1818	    0CEE  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1819	    0CF1  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1820							 imprime_caracter_color	'B',[boton_color],[boton_caracter_color]
+1  1821	    0CF3  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1822	    0CF5  B0 42				 mov al,'B'		 ;DL = 'B' a imprimir
+1  1823	    0CF7  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1824	    0CF9  8A 1E	017Cr			 mov bl,[boton_color]	      ;BL (4 bits mas significativos) =			    +
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 33
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   1825					 [boton_caracter_color]	de fondo del 'B'
+1  1826	    0CFD  32 1E	017Dr		     xor bl,[boton_caracter_color]		 ;BL (4	bits menos significativos) =	    +
+   1827					 [boton_caracter_color]	del 'B'
+1  1828	    0D01  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el 'B'
+1  1829	    0D04  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el 'B' en AL	con +
+   1830					 el [boton_caracter_color] BL
+   1831	    0D06  FE 06	017Br			 inc [boton_columna]
+   1832						 posiciona_cursor [boton_renglon],[boton_columna]
+1  1833	    0D0A  8A 36	017Ar			 mov dh,[boton_renglon]	 ;dh = [boton_renglon]
+1  1834	    0D0E  8A 16	017Br			 mov dl,[boton_columna]	 ;dl = [boton_columna]
+1  1835	    0D12  BB 0000			 mov bx,0
+1  1836	    0D15  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1837	    0D18  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1838							 imprime_caracter_color	'i',[boton_color],[boton_caracter_color]
+1  1839	    0D1A  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1840	    0D1C  B0 69				 mov al,'i'		 ;DL = 'i' a imprimir
+1  1841	    0D1E  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1842	    0D20  8A 1E	017Cr			 mov bl,[boton_color]	      ;BL (4 bits mas significativos) =			    +
+   1843					 [boton_caracter_color]	de fondo del 'i'
+1  1844	    0D24  32 1E	017Dr		     xor bl,[boton_caracter_color]		 ;BL (4	bits menos significativos) =	    +
+   1845					 [boton_caracter_color]	del 'i'
+1  1846	    0D28  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el 'i'
+1  1847	    0D2B  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el 'i' en AL	con +
+   1848					 el [boton_caracter_color] BL
+   1849	    0D2D  FE 06	017Br			 inc [boton_columna]
+   1850						 posiciona_cursor [boton_renglon],[boton_columna]
+1  1851	    0D31  8A 36	017Ar			 mov dh,[boton_renglon]	 ;dh = [boton_renglon]
+1  1852	    0D35  8A 16	017Br			 mov dl,[boton_columna]	 ;dl = [boton_columna]
+1  1853	    0D39  BB 0000			 mov bx,0
+1  1854	    0D3C  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1855	    0D3F  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1856							 imprime_caracter_color	'n',[boton_color],[boton_caracter_color]
+1  1857	    0D41  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1858	    0D43  B0 6E				 mov al,'n'		 ;DL = 'n' a imprimir
+1  1859	    0D45  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1860	    0D47  8A 1E	017Cr			 mov bl,[boton_color]	      ;BL (4 bits mas significativos) =			    +
+   1861					 [boton_caracter_color]	de fondo del 'n'
+1  1862	    0D4B  32 1E	017Dr		     xor bl,[boton_caracter_color]		 ;BL (4	bits menos significativos) =	    +
+   1863					 [boton_caracter_color]	del 'n'
+1  1864	    0D4F  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el 'n'
+1  1865	    0D52  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el 'n' en AL	con +
+   1866					 el [boton_caracter_color] BL
+   1867
+   1868							 ; ? Imprime Boton Bin (Propuesta)
+   1869	    0D54  C6 06	017Br 11			 mov [boton_columna],17
+   1870	    0D59  C6 06	017Ar 13			 mov [boton_renglon],19
+   1871	    0D5E  C6 06	017Cr 80			 mov [boton_color],bgGrisOscuro
+   1872	    0D63  C6 06	017Dr 0F		 mov [boton_caracter_color],cBlanco
+   1873	    0D68  E8 0096				 call IMPRIME_BOTON
+   1874	    0D6B  FE 06	017Br			 inc [boton_columna]
+   1875	    0D6F  FE 06	017Ar			 inc [boton_renglon]
+   1876						 posiciona_cursor [boton_renglon],[boton_columna]
+1  1877	    0D73  8A 36	017Ar			 mov dh,[boton_renglon]	 ;dh = [boton_renglon]
+1  1878	    0D77  8A 16	017Br			 mov dl,[boton_columna]	 ;dl = [boton_columna]
+1  1879	    0D7B  BB 0000			 mov bx,0
+1  1880	    0D7E  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1881	    0D81  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 34
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   1882							 imprime_caracter_color	'O',[boton_color],[boton_caracter_color]
+1  1883	    0D83  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1884	    0D85  B0 4F				 mov al,'O'		 ;DL = 'O' a imprimir
+1  1885	    0D87  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1886	    0D89  8A 1E	017Cr			 mov bl,[boton_color]	      ;BL (4 bits mas significativos) =			    +
+   1887					 [boton_caracter_color]	de fondo del 'O'
+1  1888	    0D8D  32 1E	017Dr		     xor bl,[boton_caracter_color]		 ;BL (4	bits menos significativos) =	    +
+   1889					 [boton_caracter_color]	del 'O'
+1  1890	    0D91  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el 'O'
+1  1891	    0D94  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el 'O' en AL	con +
+   1892					 el [boton_caracter_color] BL
+   1893	    0D96  FE 06	017Br			 inc [boton_columna]
+   1894						 posiciona_cursor [boton_renglon],[boton_columna]
+1  1895	    0D9A  8A 36	017Ar			 mov dh,[boton_renglon]	 ;dh = [boton_renglon]
+1  1896	    0D9E  8A 16	017Br			 mov dl,[boton_columna]	 ;dl = [boton_columna]
+1  1897	    0DA2  BB 0000			 mov bx,0
+1  1898	    0DA5  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1899	    0DA8  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1900							 imprime_caracter_color	'c',[boton_color],[boton_caracter_color]
+1  1901	    0DAA  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1902	    0DAC  B0 63				 mov al,'c'		 ;DL = 'c' a imprimir
+1  1903	    0DAE  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1904	    0DB0  8A 1E	017Cr			 mov bl,[boton_color]	      ;BL (4 bits mas significativos) =			    +
+   1905					 [boton_caracter_color]	de fondo del 'c'
+1  1906	    0DB4  32 1E	017Dr		     xor bl,[boton_caracter_color]		 ;BL (4	bits menos significativos) =	    +
+   1907					 [boton_caracter_color]	del 'c'
+1  1908	    0DB8  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el 'c'
+1  1909	    0DBB  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el 'c' en AL	con +
+   1910					 el [boton_caracter_color] BL
+   1911	    0DBD  FE 06	017Br			 inc [boton_columna]
+   1912						 posiciona_cursor [boton_renglon],[boton_columna]
+1  1913	    0DC1  8A 36	017Ar			 mov dh,[boton_renglon]	 ;dh = [boton_renglon]
+1  1914	    0DC5  8A 16	017Br			 mov dl,[boton_columna]	 ;dl = [boton_columna]
+1  1915	    0DC9  BB 0000			 mov bx,0
+1  1916	    0DCC  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1917	    0DCF  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1918							 imprime_caracter_color	't',[boton_color],[boton_caracter_color]
+1  1919	    0DD1  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1920	    0DD3  B0 74				 mov al,'t'		 ;DL = 't' a imprimir
+1  1921	    0DD5  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1922	    0DD7  8A 1E	017Cr			 mov bl,[boton_color]	      ;BL (4 bits mas significativos) =			    +
+   1923					 [boton_caracter_color]	de fondo del 't'
+1  1924	    0DDB  32 1E	017Dr		     xor bl,[boton_caracter_color]		 ;BL (4	bits menos significativos) =	    +
+   1925					 [boton_caracter_color]	del 't'
+1  1926	    0DDF  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el 't'
+1  1927	    0DE2  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el 't' en AL	con +
+   1928					 el [boton_caracter_color] BL
+   1929
+   1930							 ;Imprime un '0' inicial en la calculadora
+   1931							 posiciona_cursor 3,57d
+1  1932	    0DE4  B6 03				 mov dh,3	 ;dh = 3
+1  1933	    0DE6  B2 39				 mov dl,57d	 ;dl = 57d
+1  1934	    0DE8  BB 0000			 mov bx,0
+1  1935	    0DEB  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1936	    0DEE  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1937							 imprime_caracter_color	'0',bgNegro,cBlanco
+1  1938	    0DF0  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 35
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+1  1939	    0DF2  B0 30				 mov al,'0'		 ;DL = '0' a imprimir
+1  1940	    0DF4  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1941	    0DF6  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cBlanco de fondo del '0'
+1  1942	    0DF8  80 F3	0F		     xor bl,cBlanco		 ;BL (4	bits menos significativos) = cBlanco del '0'
+1  1943	    0DFB  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el '0'
+1  1944	    0DFE  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el '0' en AL	con +
+   1945					 el cBlanco BL
+   1946	    0E00  C3					 ret			 ;Regreso de llamada a procedimiento
+   1947	    0E01				 endp				 ;Indica fin de	procedimiento UI para el ensamblador
+   1948
+   1949					     ;procedimiento IMPRIME_BOTON
+   1950						 ;Dibuja un boton que abarca 3 renglones y 5 columnas
+   1951						 ;con un caracter centrado dentro del boton
+   1952						 ;en la	posición que se especifique (esquina superior izquierda)
+   1953						 ;y de un color	especificado
+   1954						 ;Utiliza paso de parametros por variables globales
+   1955						 ;Las variables	utilizadas son:
+   1956						 ;boton_caracter: debe contener	el caracter que	va a mostrar el	boton
+   1957						 ;boton_renglon: contiene la posicion del renglon en donde inicia el boton
+   1958						 ;boton_columna: contiene la posicion de la columna en donde inicia el boton
+   1959						 ;boton_color: contiene	el color del boton
+   1960	    0E01				 IMPRIME_BOTON proc
+   1961							 ;background de	botón
+   1962	    0E01  8A 3E	017Cr				 mov bh,[boton_color]		 ;Color	del botón
+   1963	    0E05  32 3E	017Dr			 xor bh,[boton_caracter_color]		 ;Color	del botón
+   1964							 ;Posicion superior izquierda de donde comienza	el boton
+   1965	    0E09  8A 2E	017Ar			 mov ch,[boton_renglon]
+   1966	    0E0D  8A 0E	017Br				 mov cl,[boton_columna]
+   1967						 ;Posicion inferior derecha de donde termina el	boton
+   1968	    0E11  8A F5					 mov dh,ch
+   1969	    0E13  80 C6	02				 add dh,2
+   1970	    0E16  8A D1					 mov dl,cl
+   1971	    0E18  80 C2	04				 add dl,4
+   1972	    0E1B  B8 0600				 mov ax,0600h		     ;AH=06h (scroll up	window)	AL=00h (borrar)
+   1973	    0E1E  CD 10					 int 10h		 ;int 10h opción 06h. Establece el color de fondo  +
+   1974					 en pantalla, con los atributos	dados,
+   1975									 ;especificando	CX: esquina superior izquierda CH: renglon, +
+   1976					 CL: columna y
+   1977									 ;DX: esquina inferior derecha,	DH: renglon y DL: columna
+   1978							 ;Mover	al centro de la	posición actual para imprimir el caracter
+   1979	    0E20  88 16	017Fr			 mov [col_aux],dl
+   1980	    0E24  88 36	017Er				 mov [ren_aux],dh
+   1981	    0E28  80 2E	017Fr 02			 sub [col_aux],2
+   1982	    0E2D  80 2E	017Er 01			 sub [ren_aux],1
+   1983							 posiciona_cursor [ren_aux],[col_aux]
+1  1984	    0E32  8A 36	017Er			 mov dh,[ren_aux]	 ;dh = [ren_aux]
+1  1985	    0E36  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1  1986	    0E3A  BB 0000			 mov bx,0
+1  1987	    0E3D  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  1988	    0E40  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   1989							 imprime_caracter_color	[boton_caracter],[boton_color],[boton_caracter_color]
+1  1990	    0E42  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  1991	    0E44  A0 0179r			 mov al,[boton_caracter]		 ;DL = [boton_caracter]	a imprimir
+1  1992	    0E47  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  1993	    0E49  8A 1E	017Cr			 mov bl,[boton_color]	      ;BL (4 bits mas significativos) =			    +
+   1994					 [boton_caracter_color]	de fondo del [boton_caracter]
+1  1995	    0E4D  32 1E	017Dr		     xor bl,[boton_caracter_color]		 ;BL (4	bits menos significativos) =	    +
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 36
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   1996					 [boton_caracter_color]	del [boton_caracter]
+1  1997	    0E51  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   1998					 [boton_caracter]
+1  1999	    0E54  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el		    +
+   2000					 [boton_caracter] en AL	con el [boton_caracter_color] BL
+   2001	    0E56  C3					 ret			 ;Regreso de llamada a procedimiento
+   2002	    0E57				 endp				 ;Indica fin de	procedimiento IMPRIME_BOTON para el +
+   2003					 ensamblador
+   2004
+   2005						 ;procedimiento	IMPRIME_BX
+   2006						 ;Imprime un numero entero decimal guardado en BX
+   2007						 ;Se pasa un numero a traves del registro BX que se va a imprimir con 4	o 5 digitos
+   2008						 ;Si BX	es menor a 10000, imprime 4 digitos, si	no imprime 5 digitos
+   2009						 ;Antes	de llamar el procedimiento, se requiere	definir	la posicion en pantalla
+   2010						 ;a partir de la cual comienza la impresion del	numero con ayuda de las	variables   +
+   2011					 [ren_aux] y [col_aux]
+   2012						 ;[ren_aux] para el renglon (entre 0 y 24)
+   2013						 ;[col_aux] para la columna (entre 0 y 79)
+   2014	    0E57				 IMPRIME_BX	 proc
+   2015						 ;Antes	de comenzar, se	guarda un respaldo de los registros
+   2016						 ; CX, DX, AX en la pila
+   2017						 ;Al terminar el procedimiento,	se recuperan estos valores
+   2018	    0E57  51					 push cx
+   2019	    0E58  52					 push dx
+   2020	    0E59  50					 push ax
+   2021						 ;Calcula digito de decenas de millar
+   2022	    0E5A  8B CB					 mov cx,bx
+   2023	    0E5C  81 FB	2710				 cmp bx,10000d
+   2024	    0E60  72 38	90 90				 jb imprime_4_digs
+   2025	    0E64  8B C3					 mov ax,bx				 ;pasa el valor	de BX a	AX para	    +
+   2026					 division de 16	bits
+   2027	    0E66  33 D2					 xor dx,dx				 ;limpia registro DX, para extender +
+   2028					 AX a 32 bits
+   2029	    0E68  F7 36	0018r				 div [diezmil]			 ;Division de 16 bits => AX=cociente,	    +
+   2030					 DX=residuo
+   2031													 ;El cociente contendrá el +
+   2032					 valor del dígito que puede ser entre 0 y 9.
+   2033													 ;Por lo tanto,	AX=000Xh => +
+   2034					 AH=00h	y AL=0Xh, donde	X es un	dígito	entre 0	y 9
+   2035													 ;Asumimos que el digito ya +
+   2036					 esta en AL
+   2037													 ;El residuo se	utilizara   +
+   2038					 para los siguientes digitos
+   2039	    0E6C  8B CA					 mov cx,dx				 ;Guardamos el residuo anterior	en  +
+   2040					 un registro disponible	para almacenarlo temporalmente
+   2041													 ;debido a que modificaremos+
+   2042					 DX antes de usar ese residuo
+   2043							 ;Imprime el digito decenas de millar
+   2044	    0E6E  04 30					 add al,30h				 ;Pasa el digito en AL a su valor   +
+   2045					 ASCII
+   2046	    0E70  A2 0017r				 mov [num_impr],al		 ;Pasa el digito a una variable	de memoria  +
+   2047					 ya que	AL se modifica en las siguientes macros
+   2048	    0E73  51					 push cx
+   2049							 posiciona_cursor [ren_aux],[col_aux]
+1  2050	    0E74  8A 36	017Er			 mov dh,[ren_aux]	 ;dh = [ren_aux]
+1  2051	    0E78  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1  2052	    0E7C  BB 0000			 mov bx,0
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 37
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+1  2053	    0E7F  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  2054	    0E82  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   2055							 imprime_caracter_color	[num_impr],bgNegro,cBlanco
+1  2056	    0E84  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  2057	    0E86  A0 0017r			 mov al,[num_impr]		 ;DL = [num_impr] a imprimir
+1  2058	    0E89  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  2059	    0E8B  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cBlanco de fondo del	    +
+   2060					 [num_impr]
+1  2061	    0E8D  80 F3	0F		     xor bl,cBlanco		 ;BL (4	bits menos significativos) = cBlanco del [num_impr]
+1  2062	    0E90  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   2063					 [num_impr]
+1  2064	    0E93  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el [num_impr] en +
+   2065					 AL con	el cBlanco BL
+   2066	    0E95  59					 pop cx
+   2067	    0E96  FE 06	017Fr				 inc [col_aux]			 ;Recorre a la siguiente columna para	    +
+   2068					 imprimir el siguiente digito
+   2069
+   2070	    0E9A				 imprime_4_digs:
+   2071						 ;Calcula digito de unidades de	millar
+   2072	    0E9A  8B C1					 mov ax,cx				 ;Recuperamos el residuo de la	    +
+   2073					 division anterior y preparamos	AX para	hacer division
+   2074	    0E9C  33 D2					 xor dx,dx				 ;limpia registro DX, para extender +
+   2075					 AX a 32 bits
+   2076	    0E9E  F7 36	001Ar				 div [mil]				 ;Division de 16 bits =>	    +
+   2077					 AX=cociente, DX=residuo
+   2078													 ;El cociente contendrá el +
+   2079					 valor del dígito que puede ser entre 0 y 9.
+   2080													 ;Por lo tanto,	AX=000Xh => +
+   2081					 AH=00h	y AL=0Xh, donde	X es un	dígito	entre 0	y 9
+   2082													 ;Asumimos que el digito ya +
+   2083					 esta en AL
+   2084													 ;El residuo se	utilizara   +
+   2085					 para los siguientes digitos
+   2086	    0EA2  8B CA					 mov cx,dx				 ;Guardamos el residuo anterior	en  +
+   2087					 un registro disponible	para almacenarlo temporalmente
+   2088													 ;debido a que modificaremos+
+   2089					 DX antes de usar ese residuo
+   2090							 ;Imprime el digito unidades de	millar
+   2091	    0EA4  04 30					 add al,30h				 ;Pasa el digito en AL a su valor   +
+   2092					 ASCII
+   2093	    0EA6  A2 0017r				 mov [num_impr],al		 ;Pasa el digito a una variable	de memoria  +
+   2094					 ya que	AL se modifica en las siguientes macros
+   2095	    0EA9  51					 push cx
+   2096							 posiciona_cursor [ren_aux],[col_aux]
+1  2097	    0EAA  8A 36	017Er			 mov dh,[ren_aux]	 ;dh = [ren_aux]
+1  2098	    0EAE  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1  2099	    0EB2  BB 0000			 mov bx,0
+1  2100	    0EB5  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  2101	    0EB8  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   2102							 imprime_caracter_color	[num_impr],bgNegro,cBlanco
+1  2103	    0EBA  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  2104	    0EBC  A0 0017r			 mov al,[num_impr]		 ;DL = [num_impr] a imprimir
+1  2105	    0EBF  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  2106	    0EC1  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cBlanco de fondo del	    +
+   2107					 [num_impr]
+1  2108	    0EC3  80 F3	0F		     xor bl,cBlanco		 ;BL (4	bits menos significativos) = cBlanco del [num_impr]
+1  2109	    0EC6  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 38
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   2110					 [num_impr]
+1  2111	    0EC9  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el [num_impr] en +
+   2112					 AL con	el cBlanco BL
+   2113	    0ECB  59					 pop cx
+   2114	    0ECC  FE 06	017Fr				 inc [col_aux]			 ;Recorre a la siguiente columna para	    +
+   2115					 imprimir el siguiente digito
+   2116
+   2117						 ;Calcula digito de centenas
+   2118	    0ED0  8B C1					 mov ax,cx				 ;Recuperamos el residuo de la	    +
+   2119					 division anterior y preparamos	AX para	hacer division
+   2120	    0ED2  33 D2					 xor dx,dx				 ;limpia registro DX, para extender +
+   2121					 AX a 32 bits
+   2122	    0ED4  F7 36	001Cr				 div [cien]				 ;Division de 16 bits =>	    +
+   2123					 AX=cociente, DX=residuo
+   2124													 ;El cociente contendrá el +
+   2125					 valor del dígito que puede ser entre 0 y 9.
+   2126													 ;Por lo tanto,	AX=000Xh => +
+   2127					 AH=00h	y AL=0Xh, donde	X es un	dígito	entre 0	y 9
+   2128													 ;Asumimos que el digito ya +
+   2129					 esta en AL
+   2130													 ;El residuo se	utilizara   +
+   2131					 para los siguientes digitos
+   2132	    0ED8  8B CA					 mov cx,dx				 ;Guardamos el residuo anterior	en  +
+   2133					 un registro disponible	para almacenarlo temporalmente
+   2134													 ;debido a que modificaremos+
+   2135					 DX antes de usar ese residuo
+   2136							 ;Imprime el digito de centenas
+   2137	    0EDA  04 30					 add al,30h				 ;Pasa el digito en AL a su valor   +
+   2138					 ASCII
+   2139	    0EDC  A2 0017r				 mov [num_impr],al		 ;Pasa el digito a una variable	de memoria  +
+   2140					 ya que	AL se modifica en las siguientes macros
+   2141	    0EDF  51					 push cx
+   2142							 posiciona_cursor [ren_aux],[col_aux]
+1  2143	    0EE0  8A 36	017Er			 mov dh,[ren_aux]	 ;dh = [ren_aux]
+1  2144	    0EE4  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1  2145	    0EE8  BB 0000			 mov bx,0
+1  2146	    0EEB  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  2147	    0EEE  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   2148							 imprime_caracter_color	[num_impr],bgNegro,cBlanco
+1  2149	    0EF0  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  2150	    0EF2  A0 0017r			 mov al,[num_impr]		 ;DL = [num_impr] a imprimir
+1  2151	    0EF5  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  2152	    0EF7  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cBlanco de fondo del	    +
+   2153					 [num_impr]
+1  2154	    0EF9  80 F3	0F		     xor bl,cBlanco		 ;BL (4	bits menos significativos) = cBlanco del [num_impr]
+1  2155	    0EFC  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   2156					 [num_impr]
+1  2157	    0EFF  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el [num_impr] en +
+   2158					 AL con	el cBlanco BL
+   2159	    0F01  59					 pop cx
+   2160	    0F02  FE 06	017Fr				 inc [col_aux]			 ;Recorre a la siguiente columna para	    +
+   2161					 imprimir el siguiente digito
+   2162
+   2163						 ;Calcula digito de decenas
+   2164	    0F06  8B C1					 mov ax,cx				 ;Recuperamos el residuo de la	    +
+   2165					 division anterior y preparamos	AX para	hacer division
+   2166	    0F08  33 D2					 xor dx,dx				 ;limpia registro DX, para extender +
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 39
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   2167					 AX a 32 bits
+   2168	    0F0A  F7 36	001Er				 div [diez]				 ;Division de 16 bits =>	    +
+   2169					 AX=cociente, DX=residuo
+   2170													 ;El cociente contendrá el +
+   2171					 valor del dígito que puede ser entre 0 y 9.
+   2172													 ;Por lo tanto,	AX=000Xh => +
+   2173					 AH=00h	y AL=0Xh, donde	X es un	dígito	entre 0	y 9
+   2174													 ;Asumimos que el digito ya +
+   2175					 esta en AL
+   2176													 ;El residuo se	utilizara   +
+   2177					 para los siguientes digitos
+   2178	    0F0E  8B CA					 mov cx,dx				 ;Guardamos el residuo anterior	en  +
+   2179					 un registro disponible	para almacenarlo temporalmente
+   2180													 ;debido a que modificaremos+
+   2181					 DX antes de usar ese residuo
+   2182							 ;Imprime el digito decenas
+   2183	    0F10  04 30					 add al,30h				 ;Pasa el digito en AL a su valor   +
+   2184					 ASCII
+   2185	    0F12  A2 0017r				 mov [num_impr],al		 ;Pasa el digito a una variable	de memoria  +
+   2186					 ya que	AL se modifica en las siguientes macros
+   2187	    0F15  51					 push cx
+   2188							 posiciona_cursor [ren_aux],[col_aux]
+1  2189	    0F16  8A 36	017Er			 mov dh,[ren_aux]	 ;dh = [ren_aux]
+1  2190	    0F1A  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1  2191	    0F1E  BB 0000			 mov bx,0
+1  2192	    0F21  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  2193	    0F24  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   2194							 imprime_caracter_color	[num_impr],bgNegro,cBlanco
+1  2195	    0F26  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  2196	    0F28  A0 0017r			 mov al,[num_impr]		 ;DL = [num_impr] a imprimir
+1  2197	    0F2B  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  2198	    0F2D  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cBlanco de fondo del	    +
+   2199					 [num_impr]
+1  2200	    0F2F  80 F3	0F		     xor bl,cBlanco		 ;BL (4	bits menos significativos) = cBlanco del [num_impr]
+1  2201	    0F32  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   2202					 [num_impr]
+1  2203	    0F35  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el [num_impr] en +
+   2204					 AL con	el cBlanco BL
+   2205	    0F37  59					 pop cx
+   2206	    0F38  FE 06	017Fr				 inc [col_aux]
+   2207
+   2208						 ;Calcula digito de unidades
+   2209	    0F3C  8B C1					 mov ax,cx				 ;Recuperamos el residuo de la	    +
+   2210					 division anterior
+   2211													 ;Para este caso, el residuo+
+   2212					 debe ser un número entre 0 y 9
+   2213													 ;al hacer AX =	CX, el	    +
+   2214					 residuo debe estar entre 0000h	y 0009h
+   2215													 ;=> AX	= 000Xh	-> AH=00h y +
+   2216					 AL=0Xh
+   2217							 ;Imprime el digito de unidades
+   2218	    0F3E  04 30					 add al,30h				 ;Pasa el digito en AL a su valor   +
+   2219					 ASCII
+   2220	    0F40  A2 0017r				 mov [num_impr],al		 ;Pasa el digito a una variable	de memoria  +
+   2221					 ya que	AL se modifica en las siguientes macros
+   2222							 posiciona_cursor [ren_aux],[col_aux]
+1  2223	    0F43  8A 36	017Er			 mov dh,[ren_aux]	 ;dh = [ren_aux]
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 40
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+1  2224	    0F47  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1  2225	    0F4B  BB 0000			 mov bx,0
+1  2226	    0F4E  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  2227	    0F51  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   2228							 imprime_caracter_color	[num_impr],bgNegro,cBlanco
+1  2229	    0F53  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  2230	    0F55  A0 0017r			 mov al,[num_impr]		 ;DL = [num_impr] a imprimir
+1  2231	    0F58  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  2232	    0F5A  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cBlanco de fondo del	    +
+   2233					 [num_impr]
+1  2234	    0F5C  80 F3	0F		     xor bl,cBlanco		 ;BL (4	bits menos significativos) = cBlanco del [num_impr]
+1  2235	    0F5F  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el    +
+   2236					 [num_impr]
+1  2237	    0F62  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el [num_impr] en +
+   2238					 AL con	el cBlanco BL
+   2239
+   2240						 ;Se recuperan los valores de los registros CX,	AX, y DX almacenados en	la pila
+   2241	    0F64  58					 pop ax
+   2242	    0F65  5A					 pop dx
+   2243	    0F66  59					 pop cx
+   2244	    0F67  C3					 ret					 ;intruccion ret para regresar de   +
+   2245					 llamada a procedimiento
+   2246	    0F68				 endp
+   2247
+   2248						 ;procedimiento	LIMPIA_PANTALLA_CALC
+   2249						 ;no requiere parametros de entrada
+   2250						 ;"Borra" el contenido de lo que se encuentra en la pantalla de	la calculadora
+   2251	    0F68				 LIMPIA_PANTALLA_CALC proc
+   2252	    0F68  B9 0004				 mov cx,4d
+   2253	    0F6B				 limpia_num1_y_num2:
+   2254	    0F6B  51					 push cx
+   2255	    0F6C  C6 06	017Fr 3A			 mov [col_aux],58d
+   2256	    0F71  28 0E	017Fr				 sub [col_aux],cl
+   2257							 posiciona_cursor 3,[col_aux]
+1  2258	    0F75  B6 03				 mov dh,3	 ;dh = 3
+1  2259	    0F77  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1  2260	    0F7B  BB 0000			 mov bx,0
+1  2261	    0F7E  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  2262	    0F81  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   2263							 imprime_caracter_color	' ',bgNegro,cNegro
+1  2264	    0F83  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  2265	    0F85  B0 20				 mov al,' '		 ;DL = ' ' a imprimir
+1  2266	    0F87  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  2267	    0F89  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cNegro de fondo del '	'
+1  2268	    0F8B  80 F3	00		     xor bl,cNegro		 ;BL (4	bits menos significativos) = cNegro del	' '
+1  2269	    0F8E  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el ' '
+1  2270	    0F91  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el '	' en AL	con +
+   2271					 el cNegro BL
+   2272							 posiciona_cursor 4,[col_aux]
+1  2273	    0F93  B6 04				 mov dh,4	 ;dh = 4
+1  2274	    0F95  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1  2275	    0F99  BB 0000			 mov bx,0
+1  2276	    0F9C  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  2277	    0F9F  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   2278							 imprime_caracter_color	' ',bgNegro,cNegro
+1  2279	    0FA1  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  2280	    0FA3  B0 20				 mov al,' '		 ;DL = ' ' a imprimir
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 41
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+1  2281	    0FA5  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  2282	    0FA7  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cNegro de fondo del '	'
+1  2283	    0FA9  80 F3	00		     xor bl,cNegro		 ;BL (4	bits menos significativos) = cNegro del	' '
+1  2284	    0FAC  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el ' '
+1  2285	    0FAF  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el '	' en AL	con +
+   2286					 el cNegro BL
+   2287	    0FB1  59					 pop cx
+   2288	    0FB2  E2 B7					 loop limpia_num1_y_num2
+   2289
+   2290	    0FB4				 limpia_operador:
+   2291							 posiciona_cursor 4,52d
+1  2292	    0FB4  B6 04				 mov dh,4	 ;dh = 4
+1  2293	    0FB6  B2 34				 mov dl,52d	 ;dl = 52d
+1  2294	    0FB8  BB 0000			 mov bx,0
+1  2295	    0FBB  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  2296	    0FBE  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   2297							 imprime_caracter_color	' ',bgNegro,cNegro
+1  2298	    0FC0  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  2299	    0FC2  B0 20				 mov al,' '		 ;DL = ' ' a imprimir
+1  2300	    0FC4  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  2301	    0FC6  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cNegro de fondo del '	'
+1  2302	    0FC8  80 F3	00		     xor bl,cNegro		 ;BL (4	bits menos significativos) = cNegro del	' '
+1  2303	    0FCB  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el ' '
+1  2304	    0FCE  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el '	' en AL	con +
+   2305					 el cNegro BL
+   2306
+   2307	    0FD0  B9 000A				 mov cx,10d
+   2308	    0FD3				 limpia_resultado:
+   2309	    0FD3  51					 push cx
+   2310	    0FD4  C6 06	017Fr 3A			 mov [col_aux],58d
+   2311	    0FD9  28 0E	017Fr				 sub [col_aux],cl
+   2312							 posiciona_cursor 5,[col_aux]
+1  2313	    0FDD  B6 05				 mov dh,5	 ;dh = 5
+1  2314	    0FDF  8A 16	017Fr			 mov dl,[col_aux]	 ;dl = [col_aux]
+1  2315	    0FE3  BB 0000			 mov bx,0
+1  2316	    0FE6  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  2317	    0FE9  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   2318							 imprime_caracter_color	' ',bgNegro,cNegro
+1  2319	    0FEB  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+1  2320	    0FED  B0 20				 mov al,' '		 ;DL = ' ' a imprimir
+1  2321	    0FEF  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  2322	    0FF1  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cNegro de fondo del '	'
+1  2323	    0FF3  80 F3	00		     xor bl,cNegro		 ;BL (4	bits menos significativos) = cNegro del	' '
+1  2324	    0FF6  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el ' '
+1  2325	    0FF9  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el '	' en AL	con +
+   2326					 el cNegro BL
+   2327	    0FFB  59					 pop cx
+   2328	    0FFC  E2 D5					 loop limpia_resultado
+   2329
+   2330							 posiciona_cursor 3,57d
+1  2331	    0FFE  B6 03				 mov dh,3	 ;dh = 3
+1  2332	    1000  B2 39				 mov dl,57d	 ;dl = 57d
+1  2333	    1002  BB 0000			 mov bx,0
+1  2334	    1005  B8 0200			 mov ax,0200h	 ;preparar ax para interrupcion, opcion	02h
+1  2335	    1008  CD 10				 int 10h		 ;interrupcion 10h y opcion 02h. Cambia	posicion del cursor
+   2336							 imprime_caracter_color	'0',bgNegro,cBlanco
+1  2337	    100A  B4 09				 mov ah,09h				 ;preparar AH para interrupcion, opcion	09h
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 42
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+1  2338	    100C  B0 30				 mov al,'0'		 ;DL = '0' a imprimir
+1  2339	    100E  B7 00				 mov bh,0				 ;BH = numero de pagina
+1  2340	    1010  B3 00				 mov bl,bgNegro		;BL (4 bits mas	significativos)	= cBlanco de fondo del '0'
+1  2341	    1012  80 F3	0F		     xor bl,cBlanco		 ;BL (4	bits menos significativos) = cBlanco del '0'
+1  2342	    1015  B9 0001			 mov cx,1				 ;CX = numero de veces que se imprime el '0'
+1  2343	    1018  CD 10				 int 10h				 ;int 10h, AH=09h, imprime el '0' en AL	con +
+   2344					 el cBlanco BL
+   2345
+   2346							 ;Reinicia valores de variables	utilizadas
+   2347	    101A  C7 06	0011r 0000			 mov [conta1],0
+   2348	    1020  C7 06	0013r 0000			 mov [conta2],0
+   2349	    1026  C6 06	0015r 00			 mov [operador],0
+   2350	    102B  C6 06	0016r 00			 mov [num_boton],0
+   2351	    1030  C7 06	0009r 0000			 mov [num1h],0
+   2352	    1036  C7 06	000Br 0000			 mov [num2h],0
+   2353
+   2354	    103C  E8 F5D9				 call CALCULADORA_UI
+   2355	    103F  C3					 ret			 ;Regreso de llamada a procedimiento
+   2356	    1040				 endp				 ;Indica fin de	procedimiento UI para el ensamblador
+   2357
+   2358					 ; TODO	: CONVERTIT DIG	a NUM
+   2359	    1040			 DIG2DEC proc tiny ; El	número	se pasará por bx
+   2360	    1040  55				 push		 bp
+   2361	    1041  8B EC				 mov		 bp,sp
+   2362	    1043  53				 push		 bx
+   2363						 ; push		 ax
+   2364	    1044  51				 push		 cx
+   2365	    1045  56				 push		 si
+   2366
+   2367	    1046  33 F6				 xor			 si,si
+   2368						 ; mov			 cx,10h
+   2369	    1048  33 C0				 xor			 ax,ax
+   2370
+   2371	    104A  32 ED				 xor			 ch,ch
+   2372	    104C			 txt2num:
+   2373	    104C  8A 08				 mov			 cl,[bx	+ si]
+   2374	    104E  80 F9	00			 cmp			 cl,0h
+   2375	    1051  74 26	90 90			 je			 txtbin
+   2376
+   2377	    1055  80 3E	0000r 01		 cmp			 [baseSel],baseHex
+   2378	    105A  75 0B	90 90			 jne			 txtdec
+   2379	    105E  F7 26	0020r			 mul			 [dhex]
+   2380	    1062  03 C1				 add			 ax,cx
+   2381	    1064  EB 2B	90			 jmp		 txt2num_end
+   2382
+   2383	    1067			 txtdec:
+   2384	    1067  80 3E	0000r 02		 cmp			 [baseSel],baseBin
+   2385	    106C  74 0B	90 90			 je			 txtbin
+   2386	    1070  F7 26	001Er			 mul			 [diez]
+   2387	    1074  03 C1				 add			 ax,cx
+   2388	    1076  EB 19	90			 jmp			 txt2num_end
+   2389
+   2390	    1079			 txtbin:
+   2391	    1079  80 3E	0000r 01		 cmp			 [baseSel],baseHex
+   2392	    107E  74 11	90 90			 je			 txt2num_end
+   2393	    1082  80 3E	0000r 00		 cmp			 [baseSel],baseDec
+   2394	    1087  74 08	90 90			 je			 txt2num_end
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 43
+PROYECTO.ASM
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+   2395	    108B  F7 26	0022r			 mul			 [dbin]
+   2396	    108F  03 C1				 add			 ax,cx
+   2397
+   2398	    1091			 txt2num_end:
+   2399	    1091  46				 inc			 si
+   2400	    1092  83 FE	04			 cmp			 si,digitos
+   2401	    1095  7C B5				 jl			 txt2num
+   2402
+   2403	    1097  5E				 pop			 si
+   2404	    1098  59				 pop			 cx
+   2405	    1099  5B				 pop			 bx
+   2406	    109A  5D				 pop		 bp
+   2407	    109B  C3				 ret
+   2408	    109C			 DIG2DEC endp
+   2409
+   2410	    109C			 NUM2DIG proc tiny ; En	AX y DX	estará	el resultado
+   2411	    109C  55				 push	 bp
+   2412	    109D  8B EC				 mov	 bp,sp
+   2413	    109F  BB 000A			 mov	 bx,10
+   2414						 ; xor		 si,si
+   2415	    10A2  BE 0003			 mov		 si,3h
+   2416	    10A5			 @@loop_digitos:
+   2417	    10A5  33 D2				 xor	 dx,dx
+   2418	    10A7  F7 F3				 div	 bx
+   2419						 ; push	   dx
+   2420	    10A9  88 94	000Dr			 mov		 byte ptr [resultado + si],dl
+   2421	    10AD  4E				 dec	 si
+   2422	    10AE  3D 0000			 cmp	 ax,0h
+   2423	    10B1  75 F2				 jne	 @@loop_digitos
+   2424	    10B3  5D				 pop	 bp
+   2425	    10B4  C3				 ret
+   2426	    10B5			 NUM2DIG endp
+   2427
+   2428					 end inicio
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 44
+Symbol Table
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+
+Symbol Name			  Type	 Value
+
+??DATE				  Text	 "06/15/23"
+??FILENAME			  Text	 "PROYECTO"
+??TIME				  Text	 "18:08:56"
+??VERSION			  Number 040A
+@32BIT				  Text	 0
+@@LOOP_DIGITOS			  Near	 _TEXT:10A5
+@CODE				  Text	 _TEXT
+@CODESIZE			  Text	 0
+@CPU				  Text	 0F0FH
+@CURSEG				  Text	 _TEXT
+@DATA				  Text	 DGROUP
+@DATASIZE			  Text	 0
+@FILENAME			  Text	 PROYECTO
+@INTERFACE			  Text	 000H
+@MODEL				  Text	 2
+@STACK				  Text	 DGROUP
+@WORDSIZE			  Text	 2
+BASEBIN				  Number 0002
+BASEDEC				  Number 0000
+BASEHEX				  Number 0001
+BASESEL				  Byte	 DGROUP:0000
+BGAMARILLO			  Number 00E0
+BGAZUL				  Number 0010
+BGAZULCLARO			  Number 0090
+BGBLANCO			  Number 00F0
+BGCAFE				  Number 0060
+BGCYAN				  Number 0030
+BGCYANCLARO			  Number 00B0
+BGGRISCLARO			  Number 0070
+BGGRISOSCURO			  Number 0080
+BGMAGENTA			  Number 0050
+BGMAGENTACLARO			  Number 00D0
+BGNEGRO				  Number 0000
+BGROJO				  Number 0040
+BGROJOCLARO			  Number 00C0
+BGVERDE				  Number 0020
+BGVERDECLARO			  Number 00A0
+BOTON0				  Near	 _TEXT:01BF
+BOTON0_1			  Near	 _TEXT:02FF
+BOTON1				  Near	 _TEXT:01C2
+BOTON1_1			  Near	 _TEXT:0307
+BOTON2				  Near	 _TEXT:01C5
+BOTON2_1			  Near	 _TEXT:030F
+BOTON2_IS_ENABLED		  Near	 _TEXT:01D7
+BOTON3				  Near	 _TEXT:01DA
+BOTON3_1			  Near	 _TEXT:0317
+BOTON3_IS_ENABLED		  Near	 _TEXT:01EC
+BOTON4				  Near	 _TEXT:01EF
+BOTON4_1			  Near	 _TEXT:031F
+BOTON4_IS_ENABLED		  Near	 _TEXT:0201
+BOTON5				  Near	 _TEXT:0204
+BOTON5_1			  Near	 _TEXT:0327
+BOTON5_IS_ENABLED		  Near	 _TEXT:0216
+BOTON6				  Near	 _TEXT:0219
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 45
+Symbol Table
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+BOTON6_1			  Near	 _TEXT:032F
+BOTON6_IS_ENABLED		  Near	 _TEXT:022B
+BOTON7				  Near	 _TEXT:022E
+BOTON7_1			  Near	 _TEXT:0337
+BOTON7_IS_ENABLED		  Near	 _TEXT:0240
+BOTON8				  Near	 _TEXT:0243
+BOTON8_1			  Near	 _TEXT:033F
+BOTON8_IS_ENABLED		  Near	 _TEXT:0255
+BOTON9				  Near	 _TEXT:0258
+BOTON9_1			  Near	 _TEXT:0347
+BOTON9_IS_ENABLED		  Near	 _TEXT:026A
+BOTONA				  Near	 _TEXT:026D
+BOTONA_1			  Near	 _TEXT:034F
+BOTONB				  Near	 _TEXT:0279
+BOTONBIN			  Near	 _TEXT:02DD
+BOTONB_1			  Near	 _TEXT:0357
+BOTONC				  Near	 _TEXT:0285
+BOTONC_1			  Near	 _TEXT:035F
+BOTOND				  Near	 _TEXT:0291
+BOTONDEC			  Near	 _TEXT:02C7
+BOTONDIVC			  Near	 _TEXT:02BE
+BOTONDIVC_1			  Near	 _TEXT:0397
+BOTONDIVR			  Near	 _TEXT:02C1
+BOTONDIVR_1			  Near	 _TEXT:039F
+BOTOND_1			  Near	 _TEXT:0367
+BOTONE				  Near	 _TEXT:029D
+BOTONES_7_4_1_0			  Near	 _TEXT:0107
+BOTONES_8_5_2_A			  Near	 _TEXT:013B
+BOTONES_9_6_3_B			  Near	 _TEXT:0157
+BOTONES_BASE_NUM		  Near	 _TEXT:00DD
+BOTONES_F_E_D_C			  Near	 _TEXT:0173
+BOTONES_MIN_DIV_EQU		  Near	 _TEXT:01A4
+BOTONES_SUM_MUL_MOD		  Near	 _TEXT:018F
+BOTONE_1			  Near	 _TEXT:036F
+BOTONF				  Near	 _TEXT:02A9
+BOTONF_1			  Near	 _TEXT:0377
+BOTONHEX			  Near	 _TEXT:02D2
+BOTONIGUAL			  Near	 _TEXT:02C4
+BOTONIGUAL_1			  Near	 _TEXT:03A7
+BOTONMULT			  Near	 _TEXT:02BB
+BOTONMULT_1			  Near	 _TEXT:038F
+BOTONRESTA			  Near	 _TEXT:02B8
+BOTONRESTA_1			  Near	 _TEXT:0387
+BOTONSUMA			  Near	 _TEXT:02B5
+BOTONSUMA_1			  Near	 _TEXT:037F
+BOTONX				  Near	 _TEXT:01BC
+BOTONX_1			  Near	 _TEXT:02E8
+BOTONX_2			  Near	 _TEXT:02F2
+BOTONX_3			  Near	 _TEXT:02FC
+BOTON_BIN_ENABLED		  Near	 _TEXT:0CCE
+BOTON_CARACTER			  Byte	 DGROUP:0179
+BOTON_CARACTER_COLOR		  Byte	 DGROUP:017D
+BOTON_COLOR			  Byte	 DGROUP:017C
+BOTON_COLUMNA			  Byte	 DGROUP:017B
+BOTON_DEC_ENABLED		  Near	 _TEXT:0B8C
+BOTON_HEX_ENABLED		  Near	 _TEXT:0C2D
+BOTON_RENGLON			  Byte	 DGROUP:017A
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 46
+Symbol Table
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+CALCULADORA_UI			  Near	 _TEXT:0618
+CAMARILLO			  Number 000E
+CAZUL				  Number 0001
+CAZULCLARO			  Number 0009
+CBLANCO				  Number 000F
+CCAFE				  Number 0006
+CCYAN				  Number 0003
+CCYANCLARO			  Number 000B
+CERRAR				  Near	 _TEXT:058D
+CGRISCLARO			  Number 0007
+CGRISOSCURO			  Number 0008
+CIEN				  Word	 DGROUP:001C
+CMAGENTA			  Number 0005
+CMAGENTACLARO			  Number 000D
+CNEGRO				  Number 0000
+COL_AUX				  Byte	 DGROUP:017F
+CONTA1				  Word	 DGROUP:0011
+CONTA2				  Word	 DGROUP:0013
+CROJO				  Number 0004
+CROJOCLARO			  Number 000C
+CVERDE				  Number 0002
+CVERDECLARO			  Number 000A
+DBIN				  Word	 DGROUP:0022
+DHEX				  Word	 DGROUP:0020
+DIEZ				  Word	 DGROUP:001E
+DIEZMIL				  Word	 DGROUP:0018
+DIG2DEC				  Near	 _TEXT:1040
+DIGITOS				  Number 0004
+IMPRIME_4_DIGS			  Near	 _TEXT:0E9A
+IMPRIME_BOTON			  Near	 _TEXT:0E01
+IMPRIME_BX			  Near	 _TEXT:0E57
+IMPRIME_NUM1			  Near	 _TEXT:0407
+IMPRIME_NUM1_DEC		  Near	 _TEXT:0432
+IMPRIME_NUM2			  Near	 _TEXT:046C
+IMPRIME_NUM2_DEC		  Near	 _TEXT:0497
+IMPRIME_RESULTADO		  Near	 _TEXT:04D4
+IMPRIME_RESULTADO_DEC		  Near	 _TEXT:0504
+IMPRIME_RESULTADO_PREV		  Near	 _TEXT:04D2
+IMPRIME_UI			  Near	 _TEXT:001C
+IMP_BOTON_2			  Near	 _TEXT:07F8
+IMP_BOTON_2_ENABLE		  Near	 _TEXT:07EE
+IMP_BOTON_3			  Near	 _TEXT:0833
+IMP_BOTON_3_ENABLE		  Near	 _TEXT:0829
+IMP_BOTON_4			  Near	 _TEXT:086E
+IMP_BOTON_4_ENABLE		  Near	 _TEXT:0864
+IMP_BOTON_5			  Near	 _TEXT:08A9
+IMP_BOTON_5_ENABLE		  Near	 _TEXT:089F
+IMP_BOTON_6			  Near	 _TEXT:08E4
+IMP_BOTON_6_ENABLE		  Near	 _TEXT:08DA
+IMP_BOTON_7			  Near	 _TEXT:091F
+IMP_BOTON_7_ENABLE		  Near	 _TEXT:0915
+IMP_BOTON_8			  Near	 _TEXT:095A
+IMP_BOTON_8_ENABLE		  Near	 _TEXT:0950
+IMP_BOTON_9			  Near	 _TEXT:0995
+IMP_BOTON_9_ENABLE		  Near	 _TEXT:098B
+IMP_BOTON_A			  Near	 _TEXT:09C7
+IMP_BOTON_A_ENABLE		  Near	 _TEXT:09BD
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 47
+Symbol Table
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+IMP_BOTON_B			  Near	 _TEXT:09F9
+IMP_BOTON_BIN			  Near	 _TEXT:0CD3
+IMP_BOTON_B_ENABLE		  Near	 _TEXT:09EF
+IMP_BOTON_C			  Near	 _TEXT:0A2B
+IMP_BOTON_C_ENABLE		  Near	 _TEXT:0A21
+IMP_BOTON_D			  Near	 _TEXT:0A5D
+IMP_BOTON_DEC			  Near	 _TEXT:0B91
+IMP_BOTON_D_ENABLE		  Near	 _TEXT:0A53
+IMP_BOTON_E			  Near	 _TEXT:0A8F
+IMP_BOTON_E_ENABLE		  Near	 _TEXT:0A85
+IMP_BOTON_F			  Near	 _TEXT:0AC1
+IMP_BOTON_F_ENABLE		  Near	 _TEXT:0AB7
+IMP_BOTON_HEX			  Near	 _TEXT:0C32
+INFERIOR			  Near	 _TEXT:059F
+INICIO				  Near	 _TEXT:0000
+JMP_LEE_OPER1			  Near	 _TEXT:03D8
+JMP_MOUSE_NO_CLIC		  Near	 _TEXT:00DA
+LEE_OPER1			  Near	 _TEXT:03DB
+LEE_OPER2			  Near	 _TEXT:0449
+LIMPIA_NUM1_Y_NUM2		  Near	 _TEXT:0F6B
+LIMPIA_OPERADOR			  Near	 _TEXT:0FB4
+LIMPIA_PANTALLA_CALC		  Near	 _TEXT:0F68
+LIMPIA_RESULTADO		  Near	 _TEXT:0FD3
+LOOP_DIGITOS			  Near	 _TEXT:0530
+LOOP_IMPRIMIR			  Near	 _TEXT:053D
+MARCOS_HORIZONTALES		  Near	 _TEXT:0560
+MARCOS_HOR_CAL			  Near	 _TEXT:0622
+MARCOS_VERTICALES		  Near	 _TEXT:05D1
+MARCOS_VER_CAL			  Near	 _TEXT:0675
+MARCO_CDER_CAL			  Byte	 DGROUP:0139
+MARCO_CINF_CAL			  Byte	 DGROUP:0137
+MARCO_CIZQ_CAL			  Byte	 DGROUP:0138
+MARCO_CSUP_CAL			  Byte	 DGROUP:0136
+MARCO_HINT_CAL			  Byte	 DGROUP:016C
+MARCO_HOR_INTERNO_CAL		  Near	 _TEXT:06C3
+MARCO_INF			  Byte	 DGROUP:00B3
+MARCO_INF_BOT			  Byte	 DGROUP:0174
+MARCO_INF_CAL			  Byte	 DGROUP:013A
+MARCO_INTERSECCIONES		  Near	 _TEXT:0719
+MARCO_LAT			  Byte	 DGROUP:00B2
+MARCO_LAT_BOT			  Byte	 DGROUP:0173
+MARCO_LAT_CAL			  Byte	 DGROUP:0135
+MARCO_SUP			  Byte	 DGROUP:0062
+MARCO_SUP_BOT			  Byte	 DGROUP:016E
+MARCO_SUP_CAL			  Byte	 DGROUP:0103
+MARCO_UI			  Near	 _TEXT:0556
+MARCO_VER_INTERNO_CAL		  Near	 _TEXT:06F2
+MARCO_VINT_CAL			  Byte	 DGROUP:016D
+MIL				  Word	 DGROUP:001A
+MOUSE				  Near	 _TEXT:0045
+MOUSE_NO_CLIC			  Near	 _TEXT:003A
+NO_LEE_NUM			  Near	 _TEXT:04AB
+NO_MOUSE			  Byte	 DGROUP:0025
+NUM1				  Byte	 DGROUP:0001
+NUM1H				  Word	 DGROUP:0009
+NUM2				  Byte	 DGROUP:0005
+NUM2DIG				  Near	 _TEXT:109C
+Turbo Assembler	 Version 4.1	    06/15/23 18:08:58	    Page 48
+Symbol Table
+"EyPC 2023-II Grupo 2 Proyecto - Base"
+
+
+NUM2H				  Word	 DGROUP:000B
+NUM_BOTON			  Byte	 DGROUP:0016
+NUM_IMPR			  Byte	 DGROUP:0017
+OCHO				  Byte	 DGROUP:0024
+OPERACION_RESTAR		  Near	 _TEXT:04C0
+OPERACION_SUMAR			  Near	 _TEXT:04AE
+OPERADOR			  Byte	 DGROUP:0015
+REN_AUX				  Byte	 DGROUP:017E
+RESULTADO			  Word	 DGROUP:000D
+SALIR				  Near	 _TEXT:0523
+SUPERIOR			  Near	 _TEXT:0578
+TECLADO				  Near	 _TEXT:051B
+TINY				  Number [DGROUP:BP+0004]
+TXT2NUM				  Near	 _TEXT:104C
+TXT2NUM_END			  Near	 _TEXT:1091
+TXTBIN				  Near	 _TEXT:1079
+TXTDEC				  Near	 _TEXT:1067
+
+Macro Name
+
+APAGA_CURSOR_PARPADEO
+CLEAR
+COMPRUEBA_MOUSE
+IMPRIME_CARACTER_COLOR
+INICIALIZA_DS
+LEE_MOUSE
+MUESTRA_CURSOR_MOUSE
+OCULTA_CURSOR_TECLADO
+POSICIONA_CURSOR
+
+Groups & Segments		  Bit Size Align  Combine Class
+
+DGROUP				  Group
+  STACK				  16  0040 Para	  Stack	  STACK
+  _DATA				  16  0180 Word	  Public  DATA
+_TEXT				  16  10B5 Word	  Public  CODE
+

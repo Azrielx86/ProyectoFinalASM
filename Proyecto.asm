@@ -145,6 +145,7 @@ num2h		dw		0
 resultado	dw		0,0 			;resultado es un arreglo de 2 datos tipo word
 									;el primer dato [resultado] puede guardar el contenido del resultado para la suma, resta, cociente de division o residuo de division
 									;el segundo dato [resultado+2], en conjunto con [resultado] pueden almacenar la multiplicacion de dos numeros de 16 bits
+contaRes    dw      0
 conta1 		dw 		0
 conta2 		dw 		0
 operador 	db 		0
@@ -688,7 +689,6 @@ botonDivR_1:
 		mov operador,"%"
 		jmp mouse_no_clic
 botonIgual_1:
-;Salto auxiliar para hacer un salto más largo
 		mov bx,offset num1			; Dirección en memoria del número 1
 		call DIG2DEC
 		mov	[num1h],ax
@@ -701,7 +701,9 @@ botonIgual_1:
 		mov		[resultado + 4],0000h
 
 		cmp [operador],"+"
-		jmp	operacion_sumar
+		je	operacion_sumar
+		cmp	[operador],"-"
+		je operacion_restar
 
 		jmp mouse_no_clic
 jmp_lee_oper1:
@@ -784,17 +786,27 @@ operacion_sumar:
 	mov		ax,[num1h]
 	mov		bx,[num2h]
 	add		ax,bx
-	; mov		[resultado],ax
 	call 	NUM2DIG
-	mov		cx,4d
-	jmp 	imprime_resultado_prev
+	mov		cx,[contaRes]
+	mov		di,4h
+	sub		di,cx
+	jmp 	imprime_resultado
 
-imprime_resultado_prev:
-	xor		di,di
+operacion_restar:
+	mov		ax,[num1h]
+	mov		bx,[num2h]
+	sub		ax,bx
+	call 	NUM2DIG
+	mov		cx,[contaRes]
+	mov		di,4h
+	sub		di,cx
+	; mov		cx,[contaRes]
+	jmp 	imprime_resultado
+
 imprime_resultado:
 	push	cx
-	mov		[col_aux],40d
-    mov		[ren_aux],3
+	mov		[col_aux],58d
+    mov		[ren_aux],5
 	sub		[col_aux],cl
 	posiciona_cursor [ren_aux],[col_aux]
 	mov		cl, byte PTR [resultado + di]
@@ -804,9 +816,23 @@ imprime_resultado:
 	add 	cl,07h
 imprime_resultado_dec:
 	imprime_caracter_color cl,bgNegro,cBlanco
-	inc		di
 	pop		cx
+	inc		di
 	loop	imprime_resultado
+
+	; Reinicio de todos los estados, para seguir realizando operaciones
+	mov		[resultado],0000h
+	mov		[resultado + 4],0000h
+	mov		[num1],00h
+	mov		[num1h],0h
+	mov		[num2],00h
+	mov		[num2h],0h
+	mov		[contaRes],0h
+	mov		[conta1],0h
+	mov		[conta2],0h
+	mov		[operador],0h
+	mov		[num_boton],0h
+	mov		[num_impr],0h
 
 	jmp mouse_no_clic
 
@@ -841,6 +867,7 @@ loop_imprimir:
   int 21h
   add     dx,0003h
   int 21h
+; ! REMOVER
 
 	mov ax,4C00h
 	int 21h
@@ -1597,12 +1624,14 @@ NUM2DIG proc tiny ; En AX y DX estará el resultado
 	mov     bx,10
 	; xor		si,si
 	mov		si,3h
+	mov		[contaRes],0h
 @@loop_digitos:
 	xor     dx,dx
   	div     bx
   	; push    dx
 	mov		byte ptr [resultado + si],dl
 	dec 	si
+	inc		[contaRes]
   	cmp     ax,0h
   	jne     @@loop_digitos
   	pop     bp
