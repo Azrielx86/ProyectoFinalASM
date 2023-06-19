@@ -797,19 +797,26 @@ no_lee_num:
 ; TODO : Imprimir operación - Convertir a dígitos
 
 operacion_sumar:
+    xor     dx,dx
 	mov		ax,[num1h]
 	mov		bx,[num2h]
-	add		ax,bx
+	adc		ax,bx
+    jnc     add_no_carry
+    adc     dx,0
+add_no_carry:
 	mov		[resultado],ax
-	xor		dx,dx
+    mov     [resultado + 2],dx
 	jmp 	imprime_resultado
 
 operacion_restar:
 	mov		ax,[num1h]
 	mov		bx,[num2h]
 	sub		ax,bx
+    jnc     sub_no_carry
+    sbb     dx,0
+sub_no_carry:
 	mov		[resultado],ax
-	xor		dx,dx
+    mov     [resultado + 2],dx
 	jmp		imprime_resultado
 
 operacion_multiplicar:
@@ -827,6 +834,7 @@ operacion_dividir:
     div     bx
     mov     [resultado],ax
     xor     dx,dx
+    mov     [resultado + 2],dx
     jmp     imprime_resultado
 
 operacion_modulo:
@@ -836,6 +844,7 @@ operacion_modulo:
     div     bx
     mov     [resultado],dx
     xor     dx,dx
+    mov     [resultado + 2],dx
     jmp     imprime_resultado
 
 imprime_resultado:
@@ -846,7 +855,7 @@ imprime_resultado:
 
 imprime_resultado_hex:
     mov     [ren_aux],5
-    cmp     dx,0h
+    cmp     [resultado + 2],0h
     je      imprime_ax_hex
 
     mov     ax,[resultado + 2]
@@ -866,13 +875,13 @@ imprime_ax_hex:
 loop_imp_hex:
     push    bx
     push    cx
-    posiciona_cursor [ren_aux],[col_aux]
-    pop     cx
-    pop     bx
+    ; pop     cx
+    ; pop     bx
     mov     dl,[bx + si]
     mov     [num_impr],dl
-    push    bx
-    push    cx
+    ; push    bx
+    ; push    cx
+    posiciona_cursor [ren_aux],[col_aux]
     imprime_caracter_color [num_impr],bgNegro,cBlanco
     pop     cx
     pop     bx
@@ -922,6 +931,7 @@ imprime_end:
 	mov 	[num2h],0
 	mov 	[num2],0
 	mov     [resultado],0
+    call    CLR_RES_BUFFER
 
 	jmp mouse_no_clic
 
@@ -1711,17 +1721,13 @@ endp
 HEX2DIG proc tiny
     push     bp
     mov      bp,sp
-    
     xor     si,si
-
     mov     cx,4h
 @@loop_digitos:
     xor     dx,dx
     div     [dhex]
     push    dx
     loop    @@loop_digitos
-    ; cmp     ax,0h
-    ; jne     @@loop_digitos
 
 @@loop_digs:
     pop     dx
@@ -1735,20 +1741,23 @@ HEX2DIG proc tiny
     cmp     bp,sp
     jne     @@loop_digs
 
-    ; cmp     si,4h
-    ; jge     @@end
-
-    ; mov     cx,3h
-
-; @@zeros:
-;     mov     byte ptr [bx + si],30h
-;     inc     si
-;     loop    @@zeros
-;     sub     cx,si
-
 @@end:
     pop      bp
     ret
 HEX2DIG endp
+
+CLR_RES_BUFFER proc tiny
+    push    bp
+    mov     bp,sp
+    mov     bx,offset resultadod
+    xor     si,si
+    mov     cx,8h
+@@clr:
+    mov     byte ptr [bx + si],0h
+    inc     si
+    loop    @@clr
+    pop     bp
+    ret
+CLR_RES_BUFFER endp
 
 end inicio
