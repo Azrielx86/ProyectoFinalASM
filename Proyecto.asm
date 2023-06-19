@@ -136,20 +136,22 @@ baseDec		equ		0
 baseHex		equ		1
 baseBin		equ		2
 
-baseSel		db		0
-
 resultado	dw		0,0 			;resultado es un arreglo de 2 datos tipo word
+									;el primer dato [resultado] puede guardar el contenido del resultado para la suma, resta, cociente de division o residuo de division
+									;el segundo dato [resultado+2], en conjunto con [resultado] pueden almacenar la multiplicacion de dos numeros de 16 bits
+resultadod	db 		digitos*2 dup(0)
 num1 		db 		digitos dup(0) 		;primer numero, en cada localidad guarda 1 digito, puede ser hasta 4 digitos
 num2 		db 		digitos dup(0)		;segundo numero, en cada localidad guarda 1 digito, puede ser hasta 4 digitos
 num1h		dw		0
 num2h		dw		0
-									;el primer dato [resultado] puede guardar el contenido del resultado para la suma, resta, cociente de division o residuo de division
-									;el segundo dato [resultado+2], en conjunto con [resultado] pueden almacenar la multiplicacion de dos numeros de 16 bits
 conta1 		dw 		0
 conta2 		dw 		0
+contaResA	dw		0		; Variable para contar los dígitos de AX
+contaResD	dw      0		; Variable para contar los dígitos de DX
 operador 	db 		0
 num_boton 	db 		0
 num_impr 	db 		0
+baseSel		db		0		; Variable para guardar la base seleccionada
 
 ;Auxiliares para calculo de digitos de un numero decimal de hasta 5 digitos
 diezmil		dw		10000d
@@ -701,6 +703,7 @@ botonIgual_1:
 
 	mov		[resultado],0
 
+    mov     cx,4d
 	cmp 	[operador],"+"
 	je		operacion_sumar
 
@@ -788,7 +791,6 @@ operacion_sumar:
 	mov		ax,[num1h]
 	mov		bx,[num2h]
 	add		ax,bx
-	; call 	NUM2DIG
 	mov		[resultado],ax
 	; En CX ya está la longitud del resultado
 	jmp 	imprime_resultado_prev
@@ -797,7 +799,6 @@ operacion_restar:
 	mov		ax,[num1h]
 	mov		bx,[num2h]
 	sub		ax,bx
-	; call 	NUM2DIG
 	mov		[resultado],ax
 	jmp		imprime_resultado_prev
 
@@ -811,19 +812,18 @@ imprime_resultado:
 	mov		[col_aux],58
     mov		[ren_aux],5
 loop_dig_resultado:
-
-	; sub		[col_aux],cl
-; 	posiciona_cursor [ren_aux],[col_aux]
-; 	mov		cl, byte PTR [resultado + di]
-; 	or		cl,30h
-; 	cmp		cl,3Ah
-; 	jb		imprime_resultado_dec
-; 	add 	cl,07h
-; imprime_resultado_dec:
-; 	imprime_caracter_color cl,bgNegro,cBlanco
-; 	inc		di
-; 	pop		cx
-; 	loop	imprime_resultado
+	sub		[col_aux],cl
+	posiciona_cursor [ren_aux],[col_aux]
+	mov		cl, byte PTR [resultado + di]
+	or		cl,30h
+	cmp		cl,3Ah
+	jb		imprime_resultado_dec
+	add 	cl,07h
+imprime_resultado_dec:
+	imprime_caracter_color cl,bgNegro,cBlanco
+	inc		di
+	pop		cx
+	loop	imprime_resultado
 
 	mov 	[conta1],0
 	mov 	[conta2],0
@@ -1385,118 +1385,6 @@ imp_boton_bin:
 	 	ret 			;Regreso de llamada a procedimiento
 	endp	 			;Indica fin de procedimiento IMPRIME_BOTON para el ensamblador
 
-	;procedimiento IMPRIME_BX
-	;Imprime un numero entero decimal guardado en BX
-	;Se pasa un numero a traves del registro BX que se va a imprimir con 4 o 5 digitos
-	;Si BX es menor a 10000, imprime 4 digitos, si no imprime 5 digitos
-	;Antes de llamar el procedimiento, se requiere definir la posicion en pantalla
-	;a partir de la cual comienza la impresion del numero con ayuda de las variables [ren_aux] y [col_aux]
-	;[ren_aux] para el renglon (entre 0 y 24)
-	;[col_aux] para la columna (entre 0 y 79)
-	IMPRIME_BX	proc 
-	;Antes de comenzar, se guarda un respaldo de los registros
-	; CX, DX, AX en la pila
-	;Al terminar el procedimiento, se recuperan estos valores
-		push cx
-		push dx
-		push ax
-	;Calcula digito de decenas de millar
-		mov cx,bx
-		cmp bx,10000d
-		jb imprime_4_digs
-		mov ax,bx 				;pasa el valor de BX a AX para division de 16 bits
-		xor dx,dx 				;limpia registro DX, para extender AX a 32 bits
-		div [diezmil]			;Division de 16 bits => AX=cociente, DX=residuo
-								;El cociente contendrá el valor del dígito que puede ser entre 0 y 9. 
-								;Por lo tanto, AX=000Xh => AH=00h y AL=0Xh, donde X es un dígito entre 0 y 9
-								;Asumimos que el digito ya esta en AL
-								;El residuo se utilizara para los siguientes digitos
-		mov cx,dx 				;Guardamos el residuo anterior en un registro disponible para almacenarlo temporalmente
-								;debido a que modificaremos DX antes de usar ese residuo
-		;Imprime el digito decenas de millar 
-		add al,30h				;Pasa el digito en AL a su valor ASCII
-		mov [num_impr],al 		;Pasa el digito a una variable de memoria ya que AL se modifica en las siguientes macros
-		push cx
-		posiciona_cursor [ren_aux],[col_aux]
-		imprime_caracter_color [num_impr],bgNegro,cBlanco	
-		pop cx
-		inc [col_aux] 			;Recorre a la siguiente columna para imprimir el siguiente digito
-
-	imprime_4_digs:
-	;Calcula digito de unidades de millar
-		mov ax,cx 				;Recuperamos el residuo de la division anterior y preparamos AX para hacer division
-		xor dx,dx 				;limpia registro DX, para extender AX a 32 bits
-		div [mil]				;Division de 16 bits => AX=cociente, DX=residuo
-								;El cociente contendrá el valor del dígito que puede ser entre 0 y 9. 
-								;Por lo tanto, AX=000Xh => AH=00h y AL=0Xh, donde X es un dígito entre 0 y 9
-								;Asumimos que el digito ya esta en AL
-								;El residuo se utilizara para los siguientes digitos
-		mov cx,dx 				;Guardamos el residuo anterior en un registro disponible para almacenarlo temporalmente
-								;debido a que modificaremos DX antes de usar ese residuo
-		;Imprime el digito unidades de millar
-		add al,30h				;Pasa el digito en AL a su valor ASCII
-		mov [num_impr],al 		;Pasa el digito a una variable de memoria ya que AL se modifica en las siguientes macros
-		push cx
-		posiciona_cursor [ren_aux],[col_aux]
-		imprime_caracter_color [num_impr],bgNegro,cBlanco		
-		pop cx
-		inc [col_aux] 			;Recorre a la siguiente columna para imprimir el siguiente digito
-
-	;Calcula digito de centenas
-		mov ax,cx 				;Recuperamos el residuo de la division anterior y preparamos AX para hacer division
-		xor dx,dx 				;limpia registro DX, para extender AX a 32 bits
-		div [cien]				;Division de 16 bits => AX=cociente, DX=residuo
-								;El cociente contendrá el valor del dígito que puede ser entre 0 y 9. 
-								;Por lo tanto, AX=000Xh => AH=00h y AL=0Xh, donde X es un dígito entre 0 y 9
-								;Asumimos que el digito ya esta en AL
-								;El residuo se utilizara para los siguientes digitos
-		mov cx,dx 				;Guardamos el residuo anterior en un registro disponible para almacenarlo temporalmente
-								;debido a que modificaremos DX antes de usar ese residuo
-		;Imprime el digito de centenas
-		add al,30h				;Pasa el digito en AL a su valor ASCII
-		mov [num_impr],al 		;Pasa el digito a una variable de memoria ya que AL se modifica en las siguientes macros
-		push cx
-		posiciona_cursor [ren_aux],[col_aux]
-		imprime_caracter_color [num_impr],bgNegro,cBlanco
-		pop cx
-		inc [col_aux] 			;Recorre a la siguiente columna para imprimir el siguiente digito
-
-	;Calcula digito de decenas
-		mov ax,cx 				;Recuperamos el residuo de la division anterior y preparamos AX para hacer division
-		xor dx,dx 				;limpia registro DX, para extender AX a 32 bits
-		div [diez]				;Division de 16 bits => AX=cociente, DX=residuo
-								;El cociente contendrá el valor del dígito que puede ser entre 0 y 9. 
-								;Por lo tanto, AX=000Xh => AH=00h y AL=0Xh, donde X es un dígito entre 0 y 9
-								;Asumimos que el digito ya esta en AL
-								;El residuo se utilizara para los siguientes digitos
-		mov cx,dx 				;Guardamos el residuo anterior en un registro disponible para almacenarlo temporalmente
-								;debido a que modificaremos DX antes de usar ese residuo
-		;Imprime el digito decenas
-		add al,30h				;Pasa el digito en AL a su valor ASCII
-		mov [num_impr],al 		;Pasa el digito a una variable de memoria ya que AL se modifica en las siguientes macros
-		push cx
-		posiciona_cursor [ren_aux],[col_aux]
-		imprime_caracter_color [num_impr],bgNegro,cBlanco		
-		pop cx
-		inc [col_aux]
-
-	;Calcula digito de unidades
-		mov ax,cx 				;Recuperamos el residuo de la division anterior
-								;Para este caso, el residuo debe ser un número entre 0 y 9
-								;al hacer AX = CX, el residuo debe estar entre 0000h y 0009h
-								;=> AX = 000Xh -> AH=00h y AL=0Xh
-		;Imprime el digito de unidades
-		add al,30h				;Pasa el digito en AL a su valor ASCII
-		mov [num_impr],al 		;Pasa el digito a una variable de memoria ya que AL se modifica en las siguientes macros
-		posiciona_cursor [ren_aux],[col_aux]
-		imprime_caracter_color [num_impr],bgNegro,cBlanco
-
-	;Se recuperan los valores de los registros CX, AX, y DX almacenados en la pila
-		pop ax
-		pop dx
-		pop cx
-		ret 					;intruccion ret para regresar de llamada a procedimiento
-	endp
 
 	;procedimiento LIMPIA_PANTALLA_CALC
 	;no requiere parametros de entrada
