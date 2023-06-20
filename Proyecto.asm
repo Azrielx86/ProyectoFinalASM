@@ -848,13 +848,40 @@ operacion_modulo:
     jmp     imprime_resultado
 
 imprime_resultado:
+    mov     [ren_aux],5
     cmp     [baseSel],baseHex
     je      imprime_resultado_hex
     cmp     [baseSel],baseDec
     je      imprime_resultado_dec
 
+imprime_resultado_bin:
+    mov     ax,[resultado]
+    mov     bx,offset resultadod
+    call    BIN2DIG
+
+    mov     [col_aux],50d
+    mov     bx,offset resultadod
+    xor     si,si
+    mov     cx,8h
+
+    xor     di,di
+loop_imprime_bin:
+    push    bx
+    push    cx
+    mov     dl,[bx + si]
+    mov     [num_impr],dl
+    posiciona_cursor [ren_aux],[col_aux]
+    imprime_caracter_color [num_impr],bgNegro,cBlanco
+    pop     cx
+    pop     bx
+    inc     si
+    inc     di
+    inc     [col_aux]
+    loop    loop_imprime_bin
+
+    jmp imprime_end
+
 imprime_resultado_hex:
-    mov     [ren_aux],5
     cmp     [resultado + 2],0h
     je      imprime_ax_hex
 
@@ -875,12 +902,8 @@ imprime_ax_hex:
 loop_imp_hex:
     push    bx
     push    cx
-    ; pop     cx
-    ; pop     bx
     mov     dl,[bx + si]
     mov     [num_impr],dl
-    ; push    bx
-    ; push    cx
     posiciona_cursor [ren_aux],[col_aux]
     imprime_caracter_color [num_impr],bgNegro,cBlanco
     pop     cx
@@ -894,7 +917,6 @@ loop_imp_hex:
 imprime_resultado_dec:
     cmp     dx,0h ; Si DX es distinto de cero, hay algún residuo de la multiplicación
     je      imprime_ax_dec
-    mov		[ren_aux],5
     
     div     [diezmil]
     mov     bx,dx
@@ -919,9 +941,7 @@ dm_digitos_dec:
 imprime_ax_1_dec:
     mov     bx,[resultado]
     call    IMPRIME_BX
-
 imprime_end:
-
 	mov 	[conta1],0
 	mov 	[conta2],0
 	mov 	[operador],0
@@ -1745,6 +1765,30 @@ HEX2DIG proc tiny
     pop      bp
     ret
 HEX2DIG endp
+
+BIN2DIG proc tiny
+    push    bp
+    mov     bp,sp
+    xor     si,si
+    mov     cx,8h
+@@loop_digitos:
+    xor     dx,dx
+    div     [dbin]
+    push    dx
+    loop    @@loop_digitos
+
+@@loop_digs:
+    pop     dx
+    or      dx,30h
+    mov     byte ptr [bx + si],dl
+    inc     si
+    cmp     bp,sp
+    jne     @@loop_digs
+
+@@end:
+    pop      bp
+    ret
+BIN2DIG endp
 
 CLR_RES_BUFFER proc tiny
     push    bp
