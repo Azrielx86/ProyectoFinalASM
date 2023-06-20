@@ -161,6 +161,8 @@ dbin        dw		2d
 ocho		db 		8
 ;Cuando el driver del mouse no esta disponible
 no_mouse		db 	'No se encuentra driver de mouse. Presione [enter] para salir$'
+error_zero      db  0ADh,"Divisi",0A2h,"n entre cero! [Enter para continuar]$"
+ez_len          equ $ - error_zero
 
 ;MARCO PRINCIPAL DE LA INTERFAZ GRAFICA
 ;Caracteres del marco superior
@@ -877,50 +879,100 @@ no_lee_num:
 ; TODO : Imprimir operación - Convertir a dígitos
 ;===============================================================================;
 operacion_sumar:
-    xor     dx,dx
-	mov		ax,[num1h]
-	mov		bx,[num2h]
-	adc		ax,bx
-    jnc     add_no_carry
-    adc     dx,0
+    xor     dx,dx               ; Se establece DX en cero
+	mov		ax,[num1h]          ; Se mueve el número 1 a ax
+	mov		bx,[num2h]          ; Se mueve el número 2 a bx
+	adc		ax,bx               ; Se suma ax + bx
+    jnc     add_no_carry        ; Si no hay carry, guarda el resultado en AX
+    adc     dx,0                ; Si hay carry, lo guarda en DX
 add_no_carry:
-	mov		[resultado],ax
-    mov     [resultado + 2],dx
-	jmp 	imprime_resultado
+	mov		[resultado],ax      ; Guarda AX en la primera mitad del resultado
+    mov     [resultado + 2],dx  ; Guarda DX en la segunda mitad del resutlado
+	jmp 	imprime_resultado   ; Salto a la impresión del resutlado
 
-; TODO : Imprimir negativos
 operacion_restar:
-	mov		ax,[num1h]
-	mov		bx,[num2h]
-	sub		ax,bx
-    jnc     sub_no_carry
-    sbb     dx,0
+	mov		ax,[num1h]          ; Se mueve el número 1 a ax
+	mov		bx,[num2h]          ; Se mueve el número 2 a bx
+	sub		ax,bx               ; Se resta ax - bx
+    jnc     sub_no_carry        ; Se comprueba si hubo carry, y en caso de que haya, se agrega el carry
+    sbb     dx,0                ; Se agrega el carry
 sub_no_carry:
-	mov		[resultado],ax
-    mov     [resultado + 2],dx
-	jmp		imprime_resultado
+    cmp     ax,0h               ; Se compara si ax es mayor o igual a cero para la impresión de números negativos
+    jge     sub_pos             ; Si es mayor o igual, se imprime el resultado
+    cmp     [baseSel],baseBin   ; Se comprueba si la base es binaria, para omitir el neg
+    je      sub_pos             ; Si es binario, imprime el resultado
+    push    ax                  ; Se guardan ax y dx en la pila
+    push    dx
+    mov     [col_aux],49d       ; Se prepara el dígito "-" en la posición indicada para imprimir el signo
+    mov     [ren_aux],5h
+    mov     dl,"-"
+    mov     [num_impr],dl
+    posiciona_cursor [ren_aux],[col_aux]
+    imprime_caracter_color [num_impr],bgNegro,cBlanco
+    pop     dx                  ; Se restauran ax y dx
+    pop     ax
+    neg     ax                  ; Se obtiene el complemento a 2 de ax para imprimirlo como positivo, pero el signo indicará que es negativo
+    xor     dx,dx               ; Limpia dx
+
+sub_pos:
+	mov		[resultado],ax      ; Mueve el resultado desde ax
+    mov     [resultado + 2],dx  ; Guarda dx en la segunda mitad del resultado
+	jmp		imprime_resultado   ; Salto a la impresión del resultado
 
 operacion_multiplicar:
-    mov     ax,[num1h]
-    mov     bx,[num2h]
-    mul     bx
-    mov     [resultado],ax
-    mov     [resultado + 2],dx
+	mov		ax,[num1h]          ; Se mueve el número 1 a ax
+	mov		bx,[num2h]          ; Se mueve el número 2 a bx
+    mul     bx                  ; Muliplica AX * BX
+    mov     [resultado],ax      ; Guarda AX en la primera mitad del resultado
+    mov     [resultado + 2],dx  ; Guarda BX en la segund mitad del resultado
     jmp     imprime_resultado
 
 operacion_dividir:
-    mov     ax,[num1h]
-    mov     bx,[num2h]
-    xor     dx,dx
+    mov		ax,[num1h]          ; Se mueve el número 1 a ax
+	mov		bx,[num2h]          ; Se mueve el número 2 a bx
+    cmp     bx,0h
+    jle     omite_division      ; Si se intenta dividir entre cero, se omite la operación y se muestra un mensaje de error
+    xor     dx,dx               ; Establece DX en cero para la división
     div     bx
-    mov     [resultado],ax
-    xor     dx,dx
-    mov     [resultado + 2],dx
+    mov     [resultado],ax      ; Se mueve AX a la primera mitad del resultado
+    xor     dx,dx               ; Se limpia DX
+    mov     [resultado + 2],dx  ; Se mueve DX al la segunda mitad del resultado
     jmp     imprime_resultado
+omite_division:
+    mov     [col_aux],16d       ; Se preparan las variables auxiliares para mostrar el mensaje
+    mov     [ren_aux],2h
+    mov     bx,offset error_zero; Se guarda en BX la dirección en memoria del mensaje
+    xor     si,si               ; Se inicia el índice en cero
+    mov     cx,ez_len - 1       ; Se le resta 1 al índice y se guarda en CX
+loop_msg:
+    mov     dl,[bx + si]        ; Se recorre cada carácter del mensaje para imprimirlo
+    mov     [num_impr],dl
+    push    ax
+    push    bx
+    push    cx
+    posiciona_cursor [ren_aux],[col_aux]
+    imprime_caracter_color [num_impr],bgNegro,cRojo
+    pop     cx
+    pop     bx
+    pop     ax
+    inc     [col_aux]           ; Se incrementan el índice y la columna
+    inc     si
+    loop    loop_msg
+
+pause_div0:                     ; Espera a que se presione enter para seguir la ejecución del programa
+	mov     ax,0800h
+    int     21h
+    cmp     al,0Dh
+    jnz     pause_div0
+
+    call    LIMPIA_PANTALLA_CALC; Limpia la interfaz
+    jmp     mouse_no_clic       ; Continúa la ejecución
 
 operacion_modulo:
     mov     ax,[num1h]
     mov     bx,[num2h]
+    cmp     bx,0h               ; De la misma manera que en la división, se revisa que el denominador no sea cero
+    jle     omite_division      ; y si es cero, se muestra un mensaje de error.
     xor     dx,dx
     div     bx
     mov     [resultado],dx
@@ -1625,6 +1677,19 @@ limpia_resultado:
 
     posiciona_cursor 3,57d
     imprime_caracter_color '0',bgNegro,cBlanco
+
+    mov     [col_aux],16d
+    mov     [ren_aux],2h
+    mov     cx,ez_len - 1
+limpia_mensaje:
+    mov     dl," "
+    mov     [num_impr],dl
+    push    cx
+    posiciona_cursor [ren_aux],[col_aux]
+    imprime_caracter_color [num_impr],bgNegro,cNegro
+    pop     cx
+    inc     [col_aux]
+    loop    limpia_mensaje
 
     ;Reinicia valores de variables utilizadas
     mov [conta1],0
