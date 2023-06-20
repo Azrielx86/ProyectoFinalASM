@@ -3,7 +3,6 @@ title "EyPC 2023-II Grupo 2 Proyecto - Base"
 	.model small
 	.386
 	.stack 64
-; TODO : Conversión de bases, operaciones, agregar botón C, y modo en Octal
 ;Macros
 ;clear - Limpia pantalla
 clear macro
@@ -139,18 +138,16 @@ baseBin		equ		2
 resultado	dw		0,0 			;resultado es un arreglo de 2 datos tipo word
 									;el primer dato [resultado] puede guardar el contenido del resultado para la suma, resta, cociente de division o residuo de division
 									;el segundo dato [resultado+2], en conjunto con [resultado] pueden almacenar la multiplicacion de dos numeros de 16 bits
-resultadod	db 		digitos*2 dup(0)    ; Dígitos para el resultado
-num1 		db 		digitos dup(0) 		;primer numero, en cada localidad guarda 1 digito, puede ser hasta 4 digitos
-num2 		db 		digitos dup(0)		;segundo numero, en cada localidad guarda 1 digito, puede ser hasta 4 digitos
-num1h		dw		0
-num2h		dw		0
+bf_result	db 		digitos*2 dup(0)    ; Buffer para los dígitos del resultado
+num1 		db 		digitos dup(0) 		; primer numero, en cada localidad guarda 1 digito, puede ser hasta 4 digitos
+num2 		db 		digitos dup(0)		; segundo numero, en cada localidad guarda 1 digito, puede ser hasta 4 digitos
+num1h		dw		0                   ; Valor numérico de los caracteres de num1
+num2h		dw		0                   ; Valor numérico de los caracteres de num2
 conta1 		dw 		0
 conta2 		dw 		0
-contaResA	dw		0		; Variable para contar los dígitos de AX
-contaResD	dw      0		; Variable para contar los dígitos de DX
-operador 	db 		0
+operador 	db 		0       ; Variable para almacenar el operador utilizado en la operación
 num_boton 	db 		0
-num_impr 	db 		0
+num_impr 	db 		0       ; Variable temporal para imprimir el carácter
 baseSel		db		0		; Variable para guardar la base seleccionada
 
 ;Auxiliares para calculo de digitos de un numero decimal de hasta 5 digitos
@@ -269,7 +266,7 @@ mouse:
 	;se va a revisar si fue dentro del boton [X]
 	cmp dx,0
 	je botonX
-	;Si el mouse fue presionado antes del renglon 9
+	;Si el mouse fue presionado antes del renglon 7
 	;no hay nada que revisar
 	cmp dx,7
 	jb mouse_no_clic
@@ -302,9 +299,6 @@ mouse:
 	cmp cx,28
 	jbe botones_7_4_1_0
 
-	;;;
-	;;; COMPLETAR COMPARACIONES
-	;;;
 	; Segunda columna
 	cmp cx,30
 	jb jmp_mouse_no_clic
@@ -339,6 +333,7 @@ mouse:
 
 	cmp cx,62
 	jbe botones_MIN_DIV_EQU
+
 jmp_mouse_no_clic:
 	jmp mouse_no_clic
 
@@ -403,14 +398,23 @@ botones_8_5_2_A:
 	;corresponde con boton '8'
 	cmp dx,9
 	jbe boton8
+	;renglon 12 es espacio vacio
+	cmp dx,10
+	je mouse_no_clic
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton '5'
 	cmp dx,13
 	jbe boton5
+	;renglon 16 es espacio vacio
+	cmp dx,14
+	je mouse_no_clic
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton '2'
 	cmp dx,17
 	jbe boton2
+	;renglon 20 es espacio vacio
+	cmp dx,18
+	je mouse_no_clic
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton 'A'
 	cmp dx,21
@@ -421,14 +425,23 @@ botones_9_6_3_B:
 	;corresponde con boton '9'
 	cmp dx,9
 	jbe boton9
+	;renglon 12 es espacio vacio
+	cmp dx,10
+	je mouse_no_clic
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton '6'
 	cmp dx,13
 	jbe boton6
+	;renglon 16 es espacio vacio
+	cmp dx,14
+	je mouse_no_clic
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton '3'
 	cmp dx,17
 	jbe boton3
+	;renglon 20 es espacio vacio
+	cmp dx,18
+	je mouse_no_clic
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton 'B'
 	cmp dx,21
@@ -439,42 +452,69 @@ botones_F_E_D_C:
 	;corresponde con boton 'F'
 	cmp dx,9
 	jbe botonF
+	;renglon 12 es espacio vacio
+	cmp dx,10
+	je mouse_no_clic
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton 'E'
 	cmp dx,13
 	jbe botonE
+	;renglon 16 es espacio vacio
+	cmp dx,14
+	je mouse_no_clic
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton 'D'
 	cmp dx,17
 	jbe botonD
+	;renglon 20 es espacio vacio
+	cmp dx,18
+	je mouse_no_clic
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton 'C'
 	cmp dx,21
 	jbe botonC
 
 botones_SUM_MUL_MOD:
+;renglon es espacio vacio
+	cmp dx,8
+	jbe mouse_no_clic
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton 'F'
 	cmp dx,11
 	jbe botonSuma
+	;renglon es espacio vacio
+	cmp dx,12
+	je mouse_no_clic
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton 'E'
 	cmp dx,15
 	jbe botonMult
+;renglon es espacio vacio
+	cmp dx,16
+	je mouse_no_clic
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton 'D'
 	cmp dx,19
 	jbe botonDivR
 
 botones_MIN_DIV_EQU:
+;renglon es espacio vacio
+	cmp dx,8
+	jbe mouse_no_clic
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton 'F'
 	cmp dx,11
 	jbe botonResta
+;renglon es espacio vacio
+	cmp dx,12
+	je mouse_no_clic
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton 'E'
 	cmp dx,15
 	jbe botonDivC
+;renglon es espacio vacio
+	cmp dx,16
+	je mouse_no_clic
 	;Revisar si el renglon en donde fue presionado el mouse
 	;corresponde con boton 'D'
 	cmp dx,19
@@ -486,12 +526,21 @@ botones_MIN_DIV_EQU:
 ;se salta a la seccion correspondiente
 botonX:
 	jmp botonX_1
-
 boton0:
     jmp boton0_1
 boton1:
     jmp boton1_1
 
+;===============================================================================;
+; Para los botones del 2 al 9, se comprueba primero en qué base está, ya que    ;
+; pueden ser tanto decimales como hexadecimales. Primero se comprueba si está   ;
+; en base decimal, en caso de que no esté la selección en decimal, se puede     ;
+; asumir que tampoco está en hexadecimal, por lo que directamente pasa a ser    ;
+; un boton deshabilitado.                                                       ;
+; Si no está seleccionado el modo decimal, se procede a hacer una segunda       ;
+; comparación, verificando si se está en modo decimal, en caso de que no        ;
+; esté en modo decimal, directamtente pasa a ser un botón deshabilitado.        ;
+;===============================================================================;
 boton2:
 	cmp [baseSel],baseDec
     je boton2_is_enabled
@@ -556,6 +605,11 @@ boton9:
 boton9_is_enabled:
     jmp boton9_1
 
+;===============================================================================;
+; En el caso de los botones para hexadecimal (A-F), únicamente se comprueba si  ;
+; está seleccionado el modo hexadecimal, en caso de que no esté seleccionado,   ;
+; omite los clicks, ya que son botones deshabilitados.                          ;
+;===============================================================================;
 botonA:
 	cmp [baseSel],baseHex
 	jne	mouse_no_clic
@@ -580,6 +634,10 @@ botonF:
 	cmp [baseSel],baseHex
 	jne	mouse_no_clic
     jmp botonF_1
+;===============================================================================;
+; Para los botones de operaciones, únicamente se pasa el evento del click a     ;
+; la etiqueta correspondiente.                                                  ;
+;===============================================================================;
 botonSuma:
 	jmp botonSuma_1
 botonResta:
@@ -592,6 +650,18 @@ botonDivR:
 	jmp	botonDivR_1
 botonIgual:
 	jmp	botonIgual_1
+
+;===============================================================================;
+; Para cambiar de base, se han agregado cuatro constantes para cada base, como  ;
+; están declaradas en la sección de datos, estas corresponden a:                ;
+; 0 - Base Decimal                                                              ;
+; 1 - Base Hexadecimal                                                          ;
+; 2 - Base Binaria                                                              ;
+; Además, se agregó una variable "baseSel", la cual corresponde a la base       ;
+; seleccionada, esta variable únicamente cambia en esta sección del código.     ;
+; Una vez seleccionada la base, se limpia la pantalla de la calculadora, y se   ;
+; marca el botón (o modo) seleccionado.                                         ;
+;===============================================================================;
 botonDec:
 	mov			[baseSel],baseDec
 	call 		LIMPIA_PANTALLA_CALC
@@ -618,17 +688,13 @@ botonX_3:
 	;Se cumplieron todas las condiciones
 	jmp salir
 
-;Logica para revisar si el mouse fue presionado en C
-;boton C se encuentra entre renglones 18 y 20,
-;y entre columnas 24 y 28
+;===============================================================================;
+; Cada que se presiona un botón, la variable "num_botón" toma el valor de este  ;
+; y se va directamente a la etiqueta que lee el primer operador.                ;
+;===============================================================================;
 boton0_1:
-	;Agregar la logica para verificar el boton 
-	;y limpiar la pantalla de la calculadora
 	mov	num_boton,0
 	jmp jmp_lee_oper1
-;Logica para revisar si el mouse fue presionado en '1'
-;boton '1' se encuentra entre renglones 15 y 17,
-;y entre columnas 24 y 28
 boton1_1:
     mov num_boton,1
     jmp jmp_lee_oper1
@@ -674,6 +740,11 @@ botonE_1:
 botonF_1:
     mov num_boton,15
     jmp jmp_lee_oper1
+;===============================================================================;
+; Para el caso de los botones de los operadores, al dar click en uno de estos,  ;
+; se le asigna el carácter de la operación que se realizará, y directamente     ;
+; continúa el programa en espera de la segunda operación.                       ;
+;===============================================================================;
 botonSuma_1:
 	mov operador,"+"
 	jmp mouse_no_clic
@@ -689,8 +760,14 @@ botonDivC_1:
 botonDivR_1:
 	mov operador,"%"
 	jmp mouse_no_clic
+;===============================================================================;
+; Al dar click en el botón "igual", comienza a convertir todas las entradas en  ;
+; números que la computadora pueda operar.                                      ;
+;===============================================================================;
 botonIgual_1:
 ;Salto auxiliar para hacer un salto más largo
+;!===============================================================================;
+; Para convertir los dígitos almacenados a números, en ambos
 	mov 	bx,offset num1			; Dirección en memoria del número 1
 	mov		cx,[conta1]
 	call 	DIG2DEC
@@ -720,9 +797,12 @@ botonIgual_1:
     je      operacion_modulo
 
 	jmp 	mouse_no_clic
+
+; Salto auxiliar para leer los operadores.
 jmp_lee_oper1:
 	jmp 	lee_oper1
 
+;===============================================================================;
 lee_oper1:
 	cmp [operador],0	;compara el valor del operador que puede ser 0, '+', '-', '*', '/', '%'
 	jne lee_oper2 		;Si el comparador es diferente de 0, entonces lee el segundo numero
@@ -761,7 +841,7 @@ imprime_num1_dec:
 
 	jmp mouse_no_clic
 
-; TODO : Operacion 2
+;===============================================================================;
 lee_oper2:
 	cmp [conta2],4 		;compara si el contador para num2 llego al maximo
 	jae no_lee_num 		;si conta2 es mayor o igual a 4, entonces se ha alcanzado el numero de digitos
@@ -795,7 +875,7 @@ no_lee_num:
 	jmp mouse_no_clic
 
 ; TODO : Imprimir operación - Convertir a dígitos
-
+;===============================================================================;
 operacion_sumar:
     xor     dx,dx
 	mov		ax,[num1h]
@@ -808,6 +888,7 @@ add_no_carry:
     mov     [resultado + 2],dx
 	jmp 	imprime_resultado
 
+; TODO : Imprimir negativos
 operacion_restar:
 	mov		ax,[num1h]
 	mov		bx,[num2h]
@@ -856,11 +937,13 @@ imprime_resultado:
 
 imprime_resultado_bin:
     mov     ax,[resultado]
-    mov     bx,offset resultadod
+    mov     bx,offset bf_result
+
     call    BIN2DIG
 
     mov     [col_aux],50d
-    mov     bx,offset resultadod
+    mov     bx,offset bf_result
+
     xor     si,si
     mov     cx,8h
 
@@ -886,17 +969,20 @@ imprime_resultado_hex:
     je      imprime_ax_hex
 
     mov     ax,[resultado + 2]
-    mov     bx,offset resultadod
+    mov     bx,offset bf_result
+
     call    HEX2DIG
 
 imprime_ax_hex:
     mov     ax,[resultado]
-    mov     bx,offset resultadod
+    mov     bx,offset bf_result
+
     add     bx,04h
     call    HEX2DIG
 
     mov     [col_aux],50d
-    mov     bx,offset resultadod
+    mov     bx,offset bf_result
+
     xor     si,si
     mov     cx,8h
 loop_imp_hex:
@@ -1100,6 +1186,15 @@ marco_intersecciones:
     mov [boton_caracter],'1'
     call IMPRIME_BOTON
 
+;===============================================================================;
+; Para los botones decimales y hexadecimales, se agregan comprobaciones para    ;
+; cambiar el estilo si están activados o desactivados.                          ;
+; Siguiendo la misma lógica para detectar clicks en los botones, primero se     ;
+; comprueba si la base es hexadecimal, en caso de que sea hexadecimal, se       ;
+; asume que hay que activar los botones decimales. En caso de que la base sea   ;
+; decimal, se activan los botones, y en caso de que no sea la base indicada     ;
+; estos aparecerán de color gris, indicando que están desacticvados             ;
+;===============================================================================;
     ;Imprime Boton 2
     mov [boton_columna],30
     mov [boton_renglon],15
@@ -1236,6 +1331,11 @@ imp_boton_9:
     mov [boton_caracter],'9'
     call IMPRIME_BOTON
 
+;===============================================================================;
+; Para los botones en hexadecimal, únicamente se comprueba si la base es        ;
+; hexadecimal, en caso de que la base no sea la indicada, se les dará un estilo ;
+; indicando que están desactivados.                                             ;
+;===============================================================================;
     ;Imprime Boton A
     mov [boton_columna],30
     mov [boton_renglon],19
@@ -1374,15 +1474,21 @@ imp_boton_F:
     mov [boton_caracter],'='
     call IMPRIME_BOTON
 
+;===============================================================================;
+; Para la impresión de los botones y si están seleccionados, se agrega una      ;
+; comparación para verificar si el botón corresponde a la base usada (baseSel)  ;
+; En caso de que sea la base seleccionada, este se coloreará de un color azul   ;
+; claro, y los demás quedarán en azúl obscuro                                   ;
+;===============================================================================;
     ;Imprime Boton Dec
     mov [boton_columna],17
     mov [boton_renglon],7
-    cmp [baseSel],baseDec
-    je boton_dec_enabled
-    mov [boton_color],bgAzul
-    jmp imp_boton_dec
+    cmp [baseSel],baseDec               ; Comprueba si la base es decimal
+    je boton_dec_enabled                ; Si la base coincide, se muestra el botón como activado
+    mov [boton_color],bgAzul            ; Si la base no coincide, se establece como desactivado
+    jmp imp_boton_dec                   ; Continúa la impresión
 boton_dec_enabled:
-    mov [boton_color],bgAzulClaro
+    mov [boton_color],bgAzulClaro       ; Cuando la base es distinta, se establece como botón activado
 imp_boton_dec:
     mov [boton_caracter_color],cBlanco
     call IMPRIME_BOTON
@@ -1442,23 +1548,6 @@ imp_boton_bin:
     inc [boton_columna]
     posiciona_cursor [boton_renglon],[boton_columna]
     imprime_caracter_color 'n',[boton_color],[boton_caracter_color]
-    
-    ; ? Imprime Boton Bin (Propuesta)
-    mov [boton_columna],17
-    mov [boton_renglon],19
-    mov [boton_color],bgGrisOscuro
-    mov [boton_caracter_color],cBlanco
-    call IMPRIME_BOTON
-    inc [boton_columna]
-    inc [boton_renglon]
-    posiciona_cursor [boton_renglon],[boton_columna]
-    imprime_caracter_color 'O',[boton_color],[boton_caracter_color]
-    inc [boton_columna]
-    posiciona_cursor [boton_renglon],[boton_columna]
-    imprime_caracter_color 'c',[boton_color],[boton_caracter_color]
-    inc [boton_columna]
-    posiciona_cursor [boton_renglon],[boton_columna]
-    imprime_caracter_color 't',[boton_color],[boton_caracter_color]
 
     ;Imprime un '0' inicial en la calculadora
     posiciona_cursor 3,57d
@@ -1549,80 +1638,58 @@ limpia_resultado:
     ret 			;Regreso de llamada a procedimiento
 endp	 			;Indica fin de procedimiento UI para el ensamblador
 
-; TODO : CONVERTIT DIG a NUM
+;===============================================================================;
+; Procedimiento para convertir un arreglo de carácteres a un número, a partir   ;
+; de una base dada                                                              ;
+; BX - Dirección en memoria del arreglo con dígitos                             ;
+; CX - Longitud del número                                                      ;
+; Siguiendo el siguiente ejemplo, para convertir en base 10                     ;
+; donde se usa la siguiente fórmula:                                            ;
+; ax = bx + ax * BASE                                                           ;
+;                                                                               ;
+; Ejemplo con 1245:                                                             ;
+; 1 + 0   * 10 = 1;                                                             ;
+; 2 + 1   * 10 = 12                                                             ;
+; 4 + 12  * 10 = 124                                                            ;
+; 5 + 124 * 10 = 1245                                                           ;
+;                                                                               ;
+; Se aplica la misma idea para las demás bases                                  ;
+;===============================================================================;
 DIG2DEC proc tiny ; El número se pasará por bx y la longitud por cx
 	push     	bp
 	mov      	bp,sp
-	push		bx
-	; push		ax
-	push		cx
-	push 		si
-
-	xor			si,si
-	; mov			si,cx
-	; mov			cx,10h
+	xor			si,si               ; Se colocan si, ax y ch en 0 para las operaciones
 	xor			ax,ax
-
 	xor			ch,ch
 txt2num:
-	push		cx
-	mov			cl,[bx + si]
-	; cmp			cl,0h
-	; je			txtbin
+	push		cx                  ; Se guarda el valor de cx (El contador de los dígitos)
+	mov			cl,[bx + si]        ; Se guarda en cl el dígito del arreglo + índice
 
-	cmp			[baseSel],baseHex
-	jne			txtdec
-	mul			[dhex]
-	add			ax,cx
-	jmp 		txt2num_end
+	cmp			[baseSel],baseHex   ; Se comprueba si la calculadora está en base hexadecimal
+	jne			txtdec              ; Si no es hexadecimal, pasa a comprobar si es decimal
+	mul			[dhex]              ; Para hexadecimal se multiplica por la base 16
+	add			ax,cx               ; Se le suma a el acomulador AX el dígito de CX
+	jmp 		txt2num_end         ; Salta al final de la iteración
 
 txtdec:
-	cmp			[baseSel],baseBin
-	je			txtbin
-	mul			[diez]
-	add			ax,cx
-	jmp			txt2num_end
+	cmp			[baseSel],baseBin   ; Se comprueba si la calculadora está en base decimal
+	je			txtbin              ; Si está en decimal
+	mul			[diez]              ; Se multiplica por la base decimal (10)
+	add			ax,cx               ; Se le suma al acomulador AX el díguto de CX
+	jmp			txt2num_end         ; Salta al final de la iteración
 
 txtbin:
-	; cmp			[baseSel],baseHex
-	; je			txt2num_end
-	; cmp			[baseSel],baseDec
-	; je			txt2num_end
-	mul			[dbin]
-	add			ax,cx
+	mul			[dbin]              ; Para binario, se multiplica por la base 2
+	add			ax,cx               ; Se le suma al acomulador AX el dígito de CX
 
 txt2num_end:
-	inc			si
-	pop         cx
-	cmp			si,cx
-	jl			txt2num
-
-	pop			si
-	pop			cx
-	pop			bx
+	inc			si                  ; Se incrementa el índice
+	pop         cx                  ; Se recupera la longitud del número
+	cmp			si,cx               ; Se comprueba si el índice es igual a la longitud del número
+	jl			txt2num             ; Si aún faltan dígitos, se repite el ciclo
 	pop      	bp
 	ret
 DIG2DEC endp
-
-NUM2DIG proc tiny ; En AX y DX estará el resultado
-	push    bp
-  	mov     bp,sp
-	mov     bx,10
-	; xor		si,si
-	mov		si,3h
-	mov     cx,0h
-@@loop_digitos:
-	xor     dx,dx
-  	div     bx
-  	; push    dx
-	mov		byte ptr [resultado + si],dl
-	dec 	si
-    inc 	cx
-  	cmp     ax,0h
-  	jne     @@loop_digitos
-  	pop     bp
-  	ret
-NUM2DIG endp
 
 ;procedimiento IMPRIME_BX
 ;Imprime un numero entero decimal guardado en BX
@@ -1737,69 +1804,82 @@ imprime_4_digs:
     ret 					;intruccion ret para regresar de llamada a procedimiento
 endp
 
-
+;===============================================================================;
+; Procedimiento para convertir dígitos hexadecimales a carácteres ASCII         ;
+; Datos necesarios:                                                             ;
+; BX - Dirección de memoria del inicio del arreglo de dígitos (buf_resultado)   ;
+; AX - El número que se pasará a carácteres                                     ;
+;===============================================================================;
 HEX2DIG proc tiny
-    push     bp
-    mov      bp,sp
-    xor     si,si
-    mov     cx,4h
+    push    bp                      ; Se guarda la base de la pila en la pila
+    mov     bp,sp                   ; Se establece como la base de la pila el tope de la pila
+    xor     si,si                   ; Se coloca si en 0
+    mov     cx,4h                   ; Se establece CX en 4 para el loop
 @@loop_digitos:
-    xor     dx,dx
-    div     [dhex]
-    push    dx
-    loop    @@loop_digitos
+    xor     dx,dx                   ; Se coloca DX en 0 para la división
+    div     [dhex]                  ; Se divide entre la base hexadecimal
+    push    dx                      ; Se guarda el residuo en la pila
+    loop    @@loop_digitos          ; Se repite el ciclo
 
 @@loop_digs:
-    pop     dx
-    or      dx,30h
-    cmp     dx,3Ah
-    jl      @@save
-    add     dx,07h
+    pop     dx                      ; Se saca el último dígito obtenido de la pila en DX
+    or      dx,30h                  ; Se convierte a carácter ASCII
+    cmp     dx,3Ah                  ; Se comprueba si es un valor hexadecimal
+    jl      @@save                  ; Si no es mayor a 'A', se guarda el dígito en el buffer
+    add     dx,07h                  ; Si es mayor a 'A', se le suma 7 para obtener el carácter correspondiente en hexadecimal
 @@save:
-    mov     byte ptr [bx + si],dl
-    inc     si
-    cmp     bp,sp
-    jne     @@loop_digs
+    mov     byte ptr [bx + si],dl   ; Se guarda el carácter almacenado en dl en el índice del arreglo dado por bx
+    inc     si                      ; Se incrementa el índice
+    cmp     bp,sp                   ; Se compara si aún quedan dígitos en la pila
+    jne     @@loop_digs             ; Se repite el ciclo en caso de que aún falten
 
 @@end:
-    pop      bp
-    ret
+    pop      bp                     ; Se regresa la base de la pila
+    ret                             ; Salida de la función
 HEX2DIG endp
 
+;===============================================================================;
+; Procedimiento para convertir dígitos binarios a carácteres ASCII              ;
+; Datos necesarios:                                                             ;
+; BX - Dirección de memoria del inicio del arreglo de dígitos (buf_resultado)   ;
+; AX - El número que se pasará a carácteres                                     ;
+;===============================================================================;
 BIN2DIG proc tiny
-    push    bp
-    mov     bp,sp
-    xor     si,si
-    mov     cx,8h
+    push    bp                      ; Se guarda la base de la pila en la pila
+    mov     bp,sp                   ; Se establece como la base de la pila el tope de la pila
+    xor     si,si                   ; Se coloca si en 0
+    mov     cx,8h                   ; CX se establece en 8 para el loop
 @@loop_digitos:
-    xor     dx,dx
-    div     [dbin]
-    push    dx
-    loop    @@loop_digitos
+    xor     dx,dx                   ; Se coloca DX en 0 para la división
+    div     [dbin]                  ; Se divide entre la base decimal
+    push    dx                      ; Se guarda el residuo en la pila
+    loop    @@loop_digitos          ; Se repite el ciclo 8 veces
 
 @@loop_digs:
-    pop     dx
-    or      dx,30h
-    mov     byte ptr [bx + si],dl
-    inc     si
-    cmp     bp,sp
-    jne     @@loop_digs
-
-@@end:
-    pop      bp
-    ret
+    pop     dx                      ; Se saca el dígito obtenido
+    or      dx,30h                  ; Se convierte a su valor en ASCII
+    mov     byte ptr [bx + si],dl   ; Se guarda el carácter en el arreglo + índice
+    inc     si                      ; Se incrementa el índice
+    cmp     bp,sp                   ; Se compara si aún quedan dígitos en la pila
+    jne     @@loop_digs             ; Se repite el ciclo hasta sacar todos los dígitos
+    pop      bp                     ; Se regresa la base de la pila
+    ret                             ; Retorno de la función
 BIN2DIG endp
 
+;===============================================================================;
+; Procedimiento para limpiar el buffer de carácteres del resultado              ;
+;===============================================================================;
 CLR_RES_BUFFER proc tiny
     push    bp
     mov     bp,sp
-    mov     bx,offset resultadod
-    xor     si,si
-    mov     cx,8h
+    mov     bx,offset bf_result     ; Se mueve a bx la dirección en memoria de bf_result
+
+    xor     si,si                   ; Se coloca el índice en 0
+    mov     cx,8h                   ; CX se coloca en 8 para recorrer el arreglo
 @@clr:
-    mov     byte ptr [bx + si],0h
-    inc     si
-    loop    @@clr
+    mov     byte ptr [bx + si],0h   ; Se coloca 0 en bf_result[si]
+    inc     si                      ; si++
+    loop    @@clr                   ; Se repite el ciclo
     pop     bp
     ret
 CLR_RES_BUFFER endp
