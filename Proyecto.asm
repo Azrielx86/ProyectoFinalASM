@@ -901,6 +901,8 @@ sub_no_carry:
     jge     sub_pos             ; Si es mayor o igual, se imprime el resultado
     cmp     [baseSel],baseBin   ; Se comprueba si la base es binaria, para omitir el neg
     je      sub_pos             ; Si es binario, imprime el resultado
+    cmp     [baseSel],baseHex   ; Se comprueba si la base es hexadecimal para omitir el neg
+    je      sub_pos
     push    ax                  ; Se guardan ax y dx en la pila
     push    dx
     mov     [col_aux],49d       ; Se prepara el dígito "-" en la posición indicada para imprimir el signo
