@@ -749,19 +749,29 @@ botonF_1:
 ;===============================================================================;
 botonSuma_1:
 	mov operador,"+"
-	jmp mouse_no_clic
+	jmp imprime_operador
 botonResta_1:
 	mov operador,"-"
-	jmp mouse_no_clic
+	jmp imprime_operador
 botonMult_1:
 	mov operador,"*"
-	jmp mouse_no_clic
+	jmp imprime_operador
 botonDivC_1:
 	mov operador,"/"
-	jmp mouse_no_clic
+	jmp imprime_operador
 botonDivR_1:
 	mov operador,"%"
+	jmp imprime_operador
+
+imprime_operador:
+    mov     cl,[operador]
+    mov     [num_impr],cl
+    mov     [ren_aux],4d
+    mov     [col_aux],59d
+    posiciona_cursor [ren_aux],[col_aux]
+    imprime_caracter_color [num_impr],bgNegro,cBlanco
 	jmp mouse_no_clic
+
 ;===============================================================================;
 ; Al dar click en el botón "igual", comienza a convertir todas las entradas en  ;
 ; números que la computadora pueda operar.                                      ;
@@ -1693,6 +1703,13 @@ limpia_mensaje:
     inc     [col_aux]
     loop    limpia_mensaje
 
+    mov     dl, " "
+    mov     [num_impr],dl
+    mov     [ren_aux],4d
+    mov     [col_aux],59d
+    posiciona_cursor [ren_aux],[col_aux]
+    imprime_caracter_color [num_impr],bgNegro,cBlanco
+
     ;Reinicia valores de variables utilizadas
     mov [conta1],0
     mov [conta2],0
@@ -1700,6 +1717,8 @@ limpia_mensaje:
     mov [num_boton],0
     mov [num1h],0
     mov [num2h],0
+    mov [resultado],0
+    call CLR_RES_BUFFER
 
     call CALCULADORA_UI
     ret 			;Regreso de llamada a procedimiento
