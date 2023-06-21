@@ -544,65 +544,65 @@ boton1:
 ; esté en modo decimal, directamtente pasa a ser un botón deshabilitado.        ;
 ;===============================================================================;
 boton2:
-	cmp [baseSel],baseDec
-    je boton2_is_enabled
     cmp [baseSel],baseHex
+    je boton2_is_enabled
+    cmp [baseSel],baseDec
     jne mouse_no_clic
 boton2_is_enabled:
     jmp boton2_1
 
 boton3:
-    cmp [baseSel],baseDec
-    je boton3_is_enabled
     cmp [baseSel],baseHex
+    je boton3_is_enabled
+    cmp [baseSel],baseDec
     jne mouse_no_clic
 boton3_is_enabled:
     jmp boton3_1
 
 boton4:
-    cmp [baseSel],baseDec
-    je boton4_is_enabled
     cmp [baseSel],baseHex
+    je boton4_is_enabled
+    cmp [baseSel],baseDec
     jne mouse_no_clic
 boton4_is_enabled:
     jmp boton4_1
 
 boton5:
-    cmp [baseSel],baseDec
-    je boton5_is_enabled
     cmp [baseSel],baseHex
+    je boton5_is_enabled
+    cmp [baseSel],baseDec
     jne mouse_no_clic
 boton5_is_enabled:
     jmp boton5_1
 
 boton6:
-    cmp [baseSel],baseDec
-    je boton6_is_enabled
     cmp [baseSel],baseHex
+    je boton6_is_enabled
+    cmp [baseSel],baseDec
     jne mouse_no_clic
 boton6_is_enabled:
     jmp boton6_1
 
 boton7:
-    cmp [baseSel],baseDec
-    je boton7_is_enabled
     cmp [baseSel],baseHex
+    je boton7_is_enabled
+    cmp [baseSel],baseDec
     jne mouse_no_clic
 boton7_is_enabled:
     jmp boton7_1
 
 boton8:
-    cmp [baseSel],baseDec
-    je boton8_is_enabled
     cmp [baseSel],baseHex
+    je boton8_is_enabled
+    cmp [baseSel],baseDec
     jne mouse_no_clic
 boton8_is_enabled:
     jmp boton8_1
 	
 boton9:
-	cmp [baseSel],baseDec
-	je boton9_is_enabled
 	cmp [baseSel],baseHex
+	je boton9_is_enabled
+	cmp [baseSel],baseDec
 	jne mouse_no_clic
 boton9_is_enabled:
     jmp boton9_1
